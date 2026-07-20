@@ -15,11 +15,17 @@ Repository mục tiêu là `huggingface/transformers-pr-agent` tại commit `458
 | [Task 1: Clone và khám phá repository](task1_clone_explore.ipynb) | Xác định repo, commit, cấu trúc thư mục và phạm vi parse chính |
 | [Task 2: Parser Service CPG](task2_parser_service.ipynb) | Chạy parser dry-run, sinh node/edge/metadata/error event và kiểm tra JSONL output |
 
-## Lộ trình còn lại
+## Lộ trình và trạng thái các Task
 
 | Task | Nội dung | Trạng thái |
 |---|---|---|
-| Task 3 | Thiết kế topic và schema Kafka | Đang thực hiện |
-| Task 4 | Ingest graph vào Neo4j bằng Kafka Connect Sink | Chưa thực hiện |
-| Task 5 | Ghi metadata vào MongoDB bằng Spark Structured Streaming | Chưa thực hiện |
-| Task 6 | Xác minh replay idempotent | Chưa thực hiện |
+| Task 3 | Thiết kế topic và schema Kafka | Scaffolded / Not started |
+| Task 4 | Ingest graph vào Neo4j bằng Kafka Connect Sink | Scaffolded / Not started |
+| Task 5 | Ghi metadata vào MongoDB bằng Spark Structured Streaming | Scaffolded / Not started |
+| Task 6 | Xác minh replay idempotent | Partially implemented (SQLite local) |
+
+---
+
+## Developer Documentation
+- Project developer documentation is maintained under the [docs/](../docs/README.md) directory.
+- The public Jupyter Book focuses on lab execution evidence and reflections.

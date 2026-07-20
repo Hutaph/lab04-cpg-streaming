@@ -182,4 +182,4 @@ Tài liệu này chi tiết hóa cấu trúc thư mục của dự án và các 
 
 ## 5. Lịch sử di chuyển Mã nguồn cũ (Prototype)
 - **Trạng thái di dời**: Toàn bộ mã nguồn prototype tại `scripts/parser-service/` và `scripts/explore_repo.py` đã được di dời sang cấu trúc mới dưới `src/` và xóa bỏ hoàn toàn khỏi `scripts/` sau khi kiểm thử và xác minh thành công.
-- **Tài liệu tham chiếu**: Chi tiết bảng mapping các thành phần prototype cũ sang module mới được lưu trữ tại [refactor_mapping.md](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/refactor_mapping.md) phục vụ mục đích Traceability.
+- **Tài liệu tham chiếu**: Chi tiết bảng mapping các thành phần prototype cũ sang module mới được lưu trữ tại [clean_rewrite_migration.md](../archive/clean_rewrite_migration.md) phục vụ mục đích Traceability.

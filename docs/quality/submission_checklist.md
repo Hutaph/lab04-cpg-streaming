@@ -52,10 +52,10 @@ Bảng dưới đây liệt kê tất cả các tiêu chí chấm điểm và y�
 ---
 
 ## 4. Tài liệu kỹ thuật đi kèm trong repo
-- [ ] Tài liệu kiến trúc hệ thống (`docs/system_architecture.md`).
-- [ ] Tài liệu cấu trúc thư mục (`docs/project_structure.md`).
-- [ ] Kế hoạch triển khai chi tiết (`docs/implementation_plan.md`).
-- [ ] Ma trận truy vết (`docs/traceability_matrix.md`).
-- [ ] Tài liệu ánh xạ refactor (`docs/refactor_mapping.md`).
-- [ ] Tài liệu chiến lược kiểm thử (`docs/testing_strategy.md`).
-- [ ] Đầy đủ 7 Architectural Decision Records (ADRs) trong thư mục `docs/adr/`.
+- [ ] Tài liệu kiến trúc hệ thống (`docs/architecture/system_architecture.md`).
+- [ ] Tài liệu cấu trúc thư mục (`docs/architecture/project_structure.md`).
+- [ ] Kế hoạch triển khai chi tiết (`docs/planning/implementation_plan.md`).
+- [ ] Ma trận truy vết (`docs/planning/traceability_matrix.md`).
+- [ ] Tài liệu ánh xạ refactor (`docs/archive/clean_rewrite_migration.md`).
+- [ ] Tài liệu chiến lược kiểm thử (`docs/quality/testing_strategy.md`).
+- [ ] Đầy đủ 7 Architectural Decision Records (ADRs) trong thư mục `docs/architecture/adr/`.

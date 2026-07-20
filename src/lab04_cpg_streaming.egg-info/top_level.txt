@@ -1,5 +1,0 @@
-application
-cli
-domain
-infrastructure
-parsing

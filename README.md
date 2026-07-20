@@ -1,16 +1,30 @@
 # Lab 04: Incremental Code Property Graph Streaming Pipeline
 
-Đồ án thực hành xây dựng pipeline streaming tăng dần (incremental) trích xuất Code Property Graph (CPG) từ repository Python, truyền tải qua Kafka, nạp song song vào Neo4j và MongoDB.
+Đồ án thực hành xây dựng pipeline streaming tăng dần (incremental) trích xuất Code Property Graph (CPG) từ repository Python, truyền tải qua Kafka, nạp song song vào Neo4j (Graph DB) và MongoDB (Document DB).
 
 ---
 
-## 1. Tổng quan Dự án
-
+## 1. Overview
 - **Repository nguồn phân tích**: `huggingface/transformers-pr-agent` (https://github.com/huggingface/transformers-pr-agent)
 - **Mục tiêu**: Phân tích cú pháp sinh AST, CFG, DFG, Call graph từ mã nguồn Python để phục vụ phân tích tĩnh, xử lý streaming thời gian thực.
 - **Mô hình Repository**: Repository đồ án này là **độc lập** (`lab04-cpg-streaming`). Repository nguồn mục tiêu được clone shallow tại runtime vào thư mục `workspace/source/` và được ignore hoàn chỉnh khỏi Git.
 
-## 2. Sơ đồ Kiến trúc tổng quan (Mermaid)
+---
+
+## 2. Current Status
+
+| Task | Description | Status |
+|---|---|---|
+| **Task 1** | Clone Repository và Khám Phá File | Verified |
+| **Task 2** | Parser Service CPG Tăng Dần | Verified locally |
+| **Task 3** | Thiết Kế Topic Kafka | Scaffolded / Not started |
+| **Task 4** | Ingest Topology Graph vào Neo4j | Scaffolded / Not started |
+| **Task 5** | Ingest Metadata Mã Nguồn vào MongoDB | Scaffolded / Not started |
+| **Task 6** | Xác Minh Replay Idempotent | Partially implemented (SQLite local) |
+
+---
+
+## 3. Architecture Overview
 
 ```mermaid
 graph TD
@@ -34,46 +48,49 @@ graph TD
     Spark -->|"MongoDB Connector"| MongoDB[("MongoDB Document Database")]
 ```
 
-## 3. Trạng thái Dự án Hiện tại
-- **Mã nguồn cũ (Prototype Code)**: Đã được di dời hoàn chỉnh sang cấu trúc phân lớp mới dưới `src/` và xóa bỏ khỏi `scripts/` sau khi kiểm thử và xác minh thành công. Các notebooks `task1_clone_explore.ipynb` và `task2_parser_service.ipynb` đã được cập nhật để trỏ đến các module/entrypoints mới.
-- **Cấu trúc mới (Architecture Scaffold)**: Đã thiết lập hoàn chỉnh hệ thống cấu trúc phân lớp mới dưới `src/` (domain, application, parsing, infrastructure, cli) dưới dạng các file placeholder và interfaces compile được.
-- **Trạng thái thực thi**: **Chưa hoàn thành triển khai toàn trình (Implementation not completed)**. Toàn bộ logic kết nối Kafka, Neo4j, Spark, MongoDB thật sẽ được hoàn thiện trong các phase tiếp theo.
+---
 
-## 4. Cấu trúc Project chính
-- `src/domain/`: Thực thể nghiệp vụ, enums, events.
-- `src/application/`: Khai báo Ports và Services điều phối use case.
-- `src/parsing/`: Trích xuất AST/CFG/DFG/Call graph và stable IDs.
-- `src/infrastructure/`: Triển khai Adapters (Kafka, SQLite State Store, Jsonl, Settings).
-- `src/cli/`: CLI Typer Commands.
-- `spark_jobs/`: Mã nguồn Spark streaming.
-- `infra/`: Docker Compose cài đặt môi trường.
-- `docs/`: Tài liệu kiến trúc đầy đủ.
+## 4. Quick Start
 
-## 5. Tài liệu Kiến trúc & ADRs
-Truy cập các tài liệu chi tiết tại:
-- [Kiến trúc hệ thống](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/system_architecture.md)
-- [Cấu trúc thư mục](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/project_structure.md)
-- [Kế hoạch triển khai chi tiết](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/implementation_plan.md)
-- [Ma trận truy vết yêu cầu](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/traceability_matrix.md)
-- [Bản đồ ánh xạ refactor](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/refactor_mapping.md)
-- [Chiến lược kiểm thử](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/testing_strategy.md)
-- [ADRs danh sách quyết định kiến trúc](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/adr/)
-
-## 6. Hướng dẫn chạy nhanh (Quick Start Placeholder)
-
-### Dựng hạ tầng môi trường
+### 1. Đồng bộ môi trường ảo
 ```bash
-docker compose -f infra/docker-compose.yml up -d
+uv sync --all-extras
 ```
 
-### Chạy báo cáo Jupyter Book
+### 2. Shallow Clone repository nguồn mục tiêu
 ```bash
-cd lab04-book
-jupyter-book start
-# Hoặc biên dịch html
-jupyter-book build .
+uv run lab04 clone-source
 ```
 
-## 7. Quy tắc đóng góp và an toàn
-- **KHÔNG COMMIT** mã nguồn clone của repository mục tiêu (`workspace/source/`).
-- **KHÔNG COMMIT** các tệp tin cấu hình nhạy cảm chứa password, file SQLite (`workspace/state/parser_state.db`), checkpoint Spark (`workspace/checkpoints/`) hoặc volume dữ liệu docker DB.
+### 3. Khảo sát tệp tin nguồn
+```bash
+uv run lab04 discover --scope final --manifest artifacts/manifests/source-files.jsonl
+```
+
+### 4. Chạy Parser thử nghiệm trên một tệp tin (Dry-run)
+```bash
+uv run lab04 parse-file --file tests/fixtures/reassignment.py --dry-run --clean-output --out-dir workspace/tmp/parser-output
+```
+
+### 5. Chạy Test Suite
+```bash
+PYTHONPATH=src uv run pytest tests/unit -q
+```
+
+---
+
+## 5. Documentation
+Tất cả các tài liệu kỹ thuật chi tiết của dự án được duy trì trong thư mục `docs/`:
+- **[Documentation Guide](docs/README.md)**: Entrypoint dẫn hướng toàn bộ hệ thống tài liệu.
+- **[Architecture Reference](docs/architecture/system_architecture.md)**: Chi tiết kiến trúc hệ thống, luồng dữ liệu, stable ID.
+- **[Implementation Plan](docs/planning/implementation_plan.md)**: Kế hoạch triển khai từng phase và DoD.
+- **[Task Status (Traceability Matrix)](docs/planning/traceability_matrix.md)**: Theo dõi tiến độ hoàn thành các yêu cầu.
+- **[Testing Strategy](docs/quality/testing_strategy.md)**: Hướng dẫn chi tiết chiến dịch chạy test và verify.
+- **[Submission Checklist](docs/quality/submission_checklist.md)**: Các tiêu chuẩn tự rà soát định dạng nộp bài.
+- **[Jupyter Book Source](lab04-book/)**: Mã nguồn của báo cáo Jupyter Book chính thức.
+
+---
+
+## 6. Submission
+- Bài thực hành được nộp chính thức dưới dạng **root URL của published Jupyter Book** (GitHub Pages).
+- Moodle **chỉ nhận đúng 1 text entry** chứa URL này. Không chấp nhận nộp file nén ZIP, tệp tài liệu PDF hoặc Word.
