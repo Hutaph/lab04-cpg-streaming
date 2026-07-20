@@ -1,3 +1,3 @@
-# Kafka Connect Configuration
+# Cấu hình Kafka Connect
 
-Includes Neo4j Sink Connector configuration files.
+Thư mục này chứa các file cấu hình cho Neo4j Sink Connector.

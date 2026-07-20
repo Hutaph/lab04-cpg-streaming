@@ -1,10 +1,10 @@
-# Testing Layout for CPG Ingestion System
+# Cấu trúc Kiểm thử cho Hệ thống CPG Ingestion
 
-This directory houses tests for validating parsing correctness, deterministic stable IDs, topic event compatibility, and data streaming integration.
+Thư mục này chứa các test suite để xác minh tính chính xác của parser, thuật toán stable ID, tính tương thích của topic event và tích hợp data streaming.
 
-## Directory Structure
+## Cấu trúc thư mục
 
-- **`fixtures/`**: Static Python scripts containing typical control flow constructs (loops, calls, broken syntax) used as parser input sources.
-- **`unit/`**: Verifies builders, identifier generator, event serialization, schema validation, and graph diffing.
-- **`integration/`**: Verifies Kafka producers and local sqlite state transactions.
-- **`e2e/`**: Verifies end-to-end flow from git repository scan to Neo4j/MongoDB assertions.
+- **`fixtures/`**: Các file Python tĩnh chứa các cấu trúc điều khiển (vòng lặp, cuộc gọi hàm, lỗi cú pháp) được sử dụng làm đầu vào cho parser.
+- **`unit/`**: Kiểm thử các builders, bộ sinh stable ID, serialization event, validate schema và diff đồ thị.
+- **`integration/`**: Kiểm thử Kafka producers và các transaction SQLite state local.
+- **`e2e/`**: Kiểm thử toàn trình từ quét git repository đến các assertions trong Neo4j và MongoDB.

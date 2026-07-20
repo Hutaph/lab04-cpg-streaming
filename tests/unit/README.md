@@ -1,10 +1,10 @@
-# Unit Tests
+# Kiểm thử Đơn vị (Unit Tests)
 
-Unit tests are targeted at verifying the logical components of the parser.
+Unit tests nhằm xác minh các thành phần logic cốt lõi của parser.
 
-## Running Tests
+## Khởi chạy Tests
 
-Execute with pytest:
+Chạy thông qua pytest:
 
 ```bash
 pytest tests/unit

@@ -1,3 +1,3 @@
-# MongoDB Configuration
+# Cấu hình MongoDB
 
-Contains scripts to create index requirements for file metadata collection.
+Thư mục này chứa các scripts để tạo index phục vụ cho MongoDB file metadata collection.

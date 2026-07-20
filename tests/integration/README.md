@@ -1,3 +1,3 @@
-# Integration Tests
+# Kiểm thử Tích hợp (Integration Tests)
 
-Verifies that adapters can successfully interact with third-party systems such as local SQLite database or Kafka Broker environment.
+Xác minh các adapters có thể tương tác thành công với các hệ thống bên thứ ba như database SQLite local hoặc môi trường Kafka Broker.

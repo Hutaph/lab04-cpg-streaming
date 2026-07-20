@@ -1,10 +1,10 @@
-# Infrastructure & Docker Environment Configuration
+# Cấu hình Hạ tầng & Môi trường Docker
 
-This folder details dockerized setup instructions for local development infrastructure components (Kafka, Neo4j, MongoDB, Spark).
+Thư mục này chi tiết các hướng dẫn cài đặt dockerized cho các thành phần hạ tầng phát triển local (Kafka, Neo4j, MongoDB, Spark).
 
-## Running the setup
+## Khởi chạy hạ tầng
 
-Execute:
+Chạy lệnh:
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d

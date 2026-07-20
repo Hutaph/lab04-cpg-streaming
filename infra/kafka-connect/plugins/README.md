@@ -1,6 +1,6 @@
 # Kafka Connect Plugins
 
-Download and place the Neo4j Kafka Connect plugin jar files inside this directory.
+Tải xuống và đặt các file jar của plugin Neo4j Kafka Connect vào trong thư mục này.
 
-Recommended plugin:
+Plugin khuyến nghị:
 `neo4j-kafka-connect-2.0.0.jar`

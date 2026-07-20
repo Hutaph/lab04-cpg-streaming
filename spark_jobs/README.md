@@ -1,10 +1,10 @@
 # Spark Structured Streaming Jobs
 
-This directory contains Apache Spark streaming ingestion jobs.
+Thư mục này chứa các công việc ingestion bằng Apache Spark Structured Streaming.
 
-## Running the metadata to MongoDB job
+## Khởi chạy job ghi metadata sang MongoDB
 
-Execute locally using `spark-submit`:
+Chạy local bằng lệnh `spark-submit`:
 
 ```bash
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \

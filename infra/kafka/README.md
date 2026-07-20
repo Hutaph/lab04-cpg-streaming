@@ -1,3 +1,3 @@
-# Kafka Topic Configuration
+# Cấu hình Kafka Topic
 
-Script to create topics inside the running Kafka broker.
+Thư mục này chứa script để tạo các topic bên trong Kafka broker đang chạy.

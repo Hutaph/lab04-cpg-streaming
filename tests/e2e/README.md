@@ -1,3 +1,3 @@
-# End-to-End Tests
+# Kiểm thử End-to-End (E2E Tests)
 
-Verifies the complete CPG stream ingestion pipeline pipeline from local directory scans through to database writes in Neo4j and MongoDB.
+Xác minh toàn bộ pipeline CPG stream ingestion từ việc quét thư mục local đến việc ghi dữ liệu vào Neo4j và MongoDB.
