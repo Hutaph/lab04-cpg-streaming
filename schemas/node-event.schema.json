@@ -14,32 +14,66 @@
     "file_path",
     "content_hash",
     "parser_version",
-    "node_id",
-    "node_type"
+    "node"
   ],
   "properties": {
-    "schema_version": { "type": "integer" },
+    "schema_version": { "type": "string", "const": "1.0" },
     "event_id": { "type": "string" },
-    "event_type": { "const": "cpg_node" },
-    "event_time": { "type": "string", "format": "date-time" },
+    "event_type": { "type": "string", "enum": ["NODE_UPSERT", "NODE_DELETE"] },
+    "event_time": { "type": "string" },
     "repository_id": { "type": "string" },
     "commit_sha": { "type": "string" },
     "file_id": { "type": "string" },
     "file_path": { "type": "string" },
     "content_hash": { "type": "string" },
     "parser_version": { "type": "string" },
-    "node_id": { "type": "string" },
-    "node_type": { "type": "string" },
-    "name": { "type": ["string", "null"] },
-    "qualified_name": { "type": ["string", "null"] },
-    "ast_path": { "type": "string" },
-    "line_start": { "type": ["integer", "null"] },
-    "column_start": { "type": ["integer", "null"] },
-    "line_end": { "type": ["integer", "null"] },
-    "column_end": { "type": ["integer", "null"] },
+    "node": { "type": "object" }
+  },
+  "if": {
     "properties": {
-      "type": "object",
-      "additionalProperties": true
+      "event_type": { "const": "NODE_UPSERT" }
+    }
+  },
+  "then": {
+    "properties": {
+      "node": {
+        "type": "object",
+        "required": [
+          "node_id",
+          "node_type",
+          "ast_path"
+        ],
+        "properties": {
+          "node_id": { "type": "string" },
+          "node_type": { "type": "string" },
+          "name": { "type": ["string", "null"] },
+          "qualified_name": { "type": ["string", "null"] },
+          "ast_path": { "type": "string" },
+          "line_start": { "type": ["integer", "null"] },
+          "column_start": { "type": ["integer", "null"] },
+          "line_end": { "type": ["integer", "null"] },
+          "column_end": { "type": ["integer", "null"] },
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "node": {
+        "type": "object",
+        "required": [
+          "node_id"
+        ],
+        "properties": {
+          "node_id": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

@@ -1,19 +1,34 @@
 """Handles graph diffing for modified files to identify deleted elements."""
 
-from dataclasses import dataclass, field
-
-
-@dataclass(frozen=True, slots=True)
-class GraphDiff:
-    """Contains information on what nodes and edges to remove/add."""
-
-    nodes_to_delete: list[str] = field(default_factory=list)
-    edges_to_delete: list[str] = field(default_factory=list)
+from src.domain.models import FileState, ParsedFileGraph, GraphDiff
 
 
 class CpgDiffer:
-    """TODO: Diff current CPG structure against previous sqlite state to emit delete events."""
+    """Compares current parsed CPG subgraph against historical state to compute additions and deletions."""
 
-    def compute_diff(self, file_path: str, new_nodes: list[str], new_edges: list[str]) -> GraphDiff:
-        """Finds stale nodes and edges that are no longer present in the updated file parse."""
-        raise NotImplementedError("CPG diff processor will be implemented in Phase 11")
+    def compute_diff(self, previous: FileState | None, current: ParsedFileGraph) -> GraphDiff:
+        """Finds stale node/edge IDs and compiles current nodes/edges to upsert."""
+        if not previous:
+            return GraphDiff(
+                removed_node_ids=[],
+                removed_edge_ids=[],
+                current_nodes=current.nodes,
+                current_edges=current.edges,
+            )
+
+        old_node_ids = set(previous.node_ids)
+        old_edge_ids = set(previous.edge_ids)
+
+        current_node_ids = {n.node_id for n in current.nodes}
+        current_edge_ids = {e.edge_id for e in current.edges}
+
+        removed_node_ids = list(old_node_ids - current_node_ids)
+        removed_edge_ids = list(old_edge_ids - current_edge_ids)
+
+        # Upserting all current elements ensures properties are updated even if the ID is unchanged.
+        return GraphDiff(
+            removed_node_ids=removed_node_ids,
+            removed_edge_ids=removed_edge_ids,
+            current_nodes=current.nodes,
+            current_edges=current.edges,
+        )

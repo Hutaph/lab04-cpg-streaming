@@ -1,47 +1,105 @@
-"""Interface definitions (ports) for secondary adapters to implement."""
+"""Port definitions (Protocols) for secondary adapters to implement."""
 
-from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+from src.domain.models import FileState, ParsedFileGraph
 
 
-class SourceRepository(ABC):
-    """Port for discovering files and reading commits from the target git repository."""
+class SourceRepositoryPort(Protocol):
+    """Port for cloning source repository and traversing candidate files."""
 
-    @abstractmethod
+    def clone_repository(self) -> None:
+        """Clones the repository if it does not already exist."""
+        ...
+
     def get_commit_hash(self) -> str:
         """Returns the current commit hash (HEAD) of the repository."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
-    def list_files(self) -> list[Path]:
-        """Lists all files to parse in the repository."""
-        raise NotImplementedError
+    def list_files(self, source_root: Path | None = None) -> list[Path]:
+        """Lists paths to all eligible files inside the source root."""
+        ...
 
+    def read_file(self, relative_path: Path) -> bytes:
+        """Reads raw bytes of a file from the repository path."""
+        ...
 
-class StateStore(ABC):
-    """Port for persisting the incremental parse state of files."""
-
-    @abstractmethod
-    def get_file_hash(self, file_path: str) -> str | None:
-        """Returns the last successfully processed content hash of a file."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def update_file_state(self, file_path: str, content_hash: str, commit_hash: str, status: str) -> None:
-        """Saves the last processed file state details."""
-        raise NotImplementedError
+    def resolve_path(self, relative_path: Path) -> Path:
+        """Resolves target relative path to absolute workspace path."""
+        ...
 
 
-class EventWriterPort(ABC):
-    """Port for publishing parsed CPG events."""
+class ParserPort(Protocol):
+    """Port for parsing source code into a CPG graph model."""
 
-    @abstractmethod
+    def parse_file(self, relative_path: Path, source_code: bytes, commit_sha: str) -> ParsedFileGraph:
+        """Parses a file and wraps the output in a ParsedFileGraph model."""
+        ...
+
+
+class EventWriterPort(Protocol):
+    """Port for writing events locally (e.g. JSONL) in dry-run mode."""
+
     def write_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
-        """Writes/publishes a single event with key to the corresponding topic."""
-        raise NotImplementedError
+        """Writes a single event to a local file/destination."""
+        ...
 
-    @abstractmethod
     def flush(self) -> None:
-        """Forces pending events to flush/publish."""
-        raise NotImplementedError
+        """Flushes any buffers to local disk."""
+        ...
+
+    def clean(self) -> None:
+        """Cleans/removes output files before run starts."""
+        ...
+
+
+class EventPublisherPort(Protocol):
+    """Port for publishing events to external stream brokers (e.g. Kafka)."""
+
+    def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+        """Publishes event payload with partition key."""
+        ...
+
+    def flush(self) -> None:
+        """Blocks until all outstanding messages are delivered."""
+        ...
+
+
+class StateStorePort(Protocol):
+    """Port for managing local SQLite file parser states."""
+
+    def get(self, file_id: str) -> FileState | None:
+        """Retrieves last parsed file state."""
+        ...
+
+    def commit(self, file_id: str, file_path: str, content_hash: str, node_ids: list[str], edge_ids: list[str]) -> None:
+        """Commits/updates file state atomically."""
+        ...
+
+    def delete(self, file_id: str) -> None:
+        """Deletes file state (e.g. if file deleted from repo)."""
+        ...
+
+
+class EventValidatorPort(Protocol):
+    """Port for validating event structures against JSON schemas."""
+
+    def validate(self, event_type: str, payload: dict[str, Any]) -> None:
+        """Validates payload dict against schema, raises SchemaValidationError if invalid."""
+        ...
+
+
+class ManifestWriterPort(Protocol):
+    """Port for outputting run manifest files."""
+
+    def write_manifest(self, records: list[dict[str, Any]]) -> None:
+        """Writes array of file audit metadata records to manifest file."""
+        ...
+
+
+class ClockPort(Protocol):
+    """Port for providing ISO 8601 UTC timestamps."""
+
+    def now_iso(self) -> str:
+        """Returns current time as an ISO-8601 string ending with Z."""
+        ...

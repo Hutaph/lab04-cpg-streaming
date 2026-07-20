@@ -1,14 +1,15 @@
-"""Trigger script for executing incremental CPG parsing session."""
+"""Thin wrapper script to invoke CLI parse-repository command."""
 
 import sys
+from pathlib import Path
 
+# Insert src directory to path dynamically
+src_path = Path(__file__).resolve().parent.parent / "src"
+sys.path.insert(0, str(src_path))
 
-def main() -> None:
-    """Invokes ProcessRepositoryService CLI command wrapper."""
-    print("CPG parser runner placeholder.")
-    print("TODO: Implement in Phase 2")
-    sys.exit(0)
-
+from cli.main import app
 
 if __name__ == "__main__":
-    main()
+    # Prepend 'parse-repository' command arguments dynamically
+    sys.argv.insert(1, "parse-repository")
+    app()

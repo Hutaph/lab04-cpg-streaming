@@ -15,3 +15,11 @@ class RepositoryNotFoundError(DomainError):
 
 class StateStoreError(DomainError):
     """Raised when there is an issue reading/writing the parsing state."""
+
+
+class PublishError(DomainError):
+    """Raised when writing or publishing events to external brokers fails."""
+
+
+class SchemaValidationError(DomainError):
+    """Raised when an event fails JSON schema validation."""

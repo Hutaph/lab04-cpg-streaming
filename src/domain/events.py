@@ -1,63 +1,100 @@
 """Domain events representing updates to the Code Property Graph."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, asdict
 from typing import Any
+from src.domain.enums import EventType
 
 
 @dataclass(frozen=True, slots=True)
-class DomainEvent:
-    """Base class for all CPG-related streaming events."""
+class EventEnvelope:
+    """Common envelope attributes for all Kafka streaming events."""
 
-    schema_version: int
-    event_type: str
-    timestamp: str
-    repo: str
-    commit_hash: str
+    schema_version: str
+    event_id: str
+    event_type: EventType
+    event_time: str
+    repository_id: str
+    commit_sha: str
+    file_id: str
     file_path: str
-    file_hash: str
+    content_hash: str
+    parser_version: str
+    payload: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializes event envelope and unpacks payload to root/nested dict format."""
+        result = {
+            "schema_version": self.schema_version,
+            "event_id": self.event_id,
+            "event_type": self.event_type.value,
+            "event_time": self.event_time,
+            "repository_id": self.repository_id,
+            "commit_sha": self.commit_sha,
+            "file_id": self.file_id,
+            "file_path": self.file_path,
+            "content_hash": self.content_hash,
+            "parser_version": self.parser_version,
+        }
+        result.update(self.payload)
+        return result
 
 
-@dataclass(frozen=True, slots=True)
-class NodeEvent(DomainEvent):
-    """Event emitted when a CPG Node is parsed."""
+class EventFactory:
+    """Factory to create EventEnvelopes with correct contracts."""
 
-    id: str
-    label: str
-    ast_path: str
-    line: int | None = None
-    column: int | None = None
-    end_line: int | None = None
-    end_column: int | None = None
-    properties: dict[str, Any] = field(default_factory=dict)
+    def __init__(
+        self,
+        repository_id: str,
+        commit_sha: str,
+        file_id: str,
+        file_path: str,
+        content_hash: str,
+        parser_version: str = "1.0.0",
+        schema_version: str = "1.0",
+    ):
+        self.repository_id = repository_id
+        self.commit_sha = commit_sha
+        self.file_id = file_id
+        self.file_path = file_path
+        self.content_hash = content_hash
+        self.parser_version = parser_version
+        self.schema_version = schema_version
 
+    def _create(self, event_type: EventType, event_id: str, event_time: str, payload: dict[str, Any]) -> EventEnvelope:
+        return EventEnvelope(
+            schema_version=self.schema_version,
+            event_id=event_id,
+            event_type=event_type,
+            event_time=event_time,
+            repository_id=self.repository_id,
+            commit_sha=self.commit_sha,
+            file_id=self.file_id,
+            file_path=self.file_path,
+            content_hash=self.content_hash,
+            parser_version=self.parser_version,
+            payload=payload,
+        )
 
-@dataclass(frozen=True, slots=True)
-class EdgeEvent(DomainEvent):
-    """Event emitted when a CPG Edge is established."""
+    def create_node_upsert(self, event_id: str, event_time: str, node: dict[str, Any]) -> EventEnvelope:
+        """Create a NODE_UPSERT event envelope."""
+        return self._create(EventType.NODE_UPSERT, event_id, event_time, {"node": node})
 
-    id: str
-    source: str
-    target: str
-    edge_type: str
-    properties: dict[str, Any] = field(default_factory=dict)
+    def create_node_delete(self, event_id: str, event_time: str, node_id: str) -> EventEnvelope:
+        """Create a NODE_DELETE event envelope."""
+        return self._create(EventType.NODE_DELETE, event_id, event_time, {"node": {"node_id": node_id}})
 
+    def create_edge_upsert(self, event_id: str, event_time: str, edge: dict[str, Any]) -> EventEnvelope:
+        """Create an EDGE_UPSERT event envelope."""
+        return self._create(EventType.EDGE_UPSERT, event_id, event_time, {"edge": edge})
 
-@dataclass(frozen=True, slots=True)
-class MetadataEvent(DomainEvent):
-    """Event emitted with source file metadata stats."""
+    def create_edge_delete(self, event_id: str, event_time: str, edge_id: str) -> EventEnvelope:
+        """Create an EDGE_DELETE event envelope."""
+        return self._create(EventType.EDGE_DELETE, event_id, event_time, {"edge": {"edge_id": edge_id}})
 
-    id: str
-    size_bytes: int
-    line_count: int
-    parser: str = "python.ast"
+    def create_file_metadata_upsert(self, event_id: str, event_time: str, metadata: dict[str, Any]) -> EventEnvelope:
+        """Create a FILE_METADATA_UPSERT event envelope."""
+        return self._create(EventType.FILE_METADATA_UPSERT, event_id, event_time, {"metadata": metadata})
 
-
-@dataclass(frozen=True, slots=True)
-class ErrorEvent(DomainEvent):
-    """Event emitted when parsing fails."""
-
-    id: str
-    error_type: str
-    message: str
-    line: int | None = None
-    column: int | None = None
+    def create_parser_error(self, event_id: str, event_time: str, error: dict[str, Any]) -> EventEnvelope:
+        """Create a PARSER_ERROR event envelope."""
+        return self._create(EventType.PARSER_ERROR, event_id, event_time, {"error": error})

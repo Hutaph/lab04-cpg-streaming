@@ -3,26 +3,35 @@
 from enum import Enum
 
 
-class NodeType(str, Enum):
-    """Placeholder enumeration for CPG Node Types."""
+class EventType(str, Enum):
+    """Kafka CPG Event Types."""
 
-    AST_NODE = "AstNode"
-    CALL_TARGET = "CallTarget"
-    ERROR = "Error"
-    # TODO: Define specific AST node types (e.g., FunctionDef, Name, etc.) in Phase 2.
+    NODE_UPSERT = "NODE_UPSERT"
+    NODE_DELETE = "NODE_DELETE"
+    EDGE_UPSERT = "EDGE_UPSERT"
+    EDGE_DELETE = "EDGE_DELETE"
+    FILE_METADATA_UPSERT = "FILE_METADATA_UPSERT"
+    PARSER_ERROR = "PARSER_ERROR"
 
 
 class EdgeType(str, Enum):
-    """Placeholder enumeration for CPG Edge Types."""
+    """Official CPG Edge Types."""
 
     AST_CHILD = "AST_CHILD"
     CFG_NEXT = "CFG_NEXT"
-    DFG_REACHES = "DFG_REACHES"
+    CFG_TRUE = "CFG_TRUE"
+    CFG_FALSE = "CFG_FALSE"
+    CFG_LOOP_BODY = "CFG_LOOP_BODY"
+    CFG_LOOP_BACK = "CFG_LOOP_BACK"
+    CFG_LOOP_EXIT = "CFG_LOOP_EXIT"
+    CFG_RETURN = "CFG_RETURN"
+    DFG_DEF_USE = "DFG_DEF_USE"
     CALLS = "CALLS"
 
 
 class ParseStatus(str, Enum):
     """Status of a file parsing action."""
 
-    SUCCESS = "success"
-    FAILED = "failed"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    SKIPPED_UNCHANGED = "SKIPPED_UNCHANGED"

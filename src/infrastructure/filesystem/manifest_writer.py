@@ -1,14 +1,21 @@
-"""Saves list manifests of processed files and processing status."""
+"""Writes run manifests containing file listing analysis and exclusion logs."""
 
+import json
 from pathlib import Path
+from src.application.ports import ManifestWriterPort
 
 
-class ManifestWriter:
-    """Writes JSON/CSV manifests of target files and parse results for audit trails."""
+class ManifestWriter(ManifestWriterPort):
+    """Manifest file logger for project compliance and auditing."""
 
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
+    def __init__(self, manifest_file_path: Path):
+        self.manifest_file_path = manifest_file_path
 
-    def write_manifest(self, run_id: str, files_processed: list[dict]) -> Path:
-        """TODO: Write report of files parsed and results to output artifacts directory."""
-        raise NotImplementedError("Manifest writer will be implemented in Phase 12")
+    def write_manifest(self, records: list[dict]) -> None:
+        """Appends list of dictionaries directly into manifest JSON Lines file."""
+        self.manifest_file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write lines
+        with open(self.manifest_file_path, "w", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")

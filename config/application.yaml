@@ -14,7 +14,7 @@ source_repository:
 
 parser:
   version: "1.0.0"
-  schema_version: 1
+  schema_version: "1.0"
   # AST parser type: python.ast
   type: "python.ast"
 

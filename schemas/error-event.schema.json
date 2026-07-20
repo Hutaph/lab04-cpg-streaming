@@ -14,26 +14,35 @@
     "file_path",
     "content_hash",
     "parser_version",
-    "error_type",
-    "message",
-    "retryable"
+    "error"
   ],
   "properties": {
-    "schema_version": { "type": "integer" },
+    "schema_version": { "type": "string", "const": "1.0" },
     "event_id": { "type": "string" },
-    "event_type": { "const": "parser_error" },
-    "event_time": { "type": "string", "format": "date-time" },
+    "event_type": { "const": "PARSER_ERROR" },
+    "event_time": { "type": "string" },
     "repository_id": { "type": "string" },
     "commit_sha": { "type": "string" },
     "file_id": { "type": "string" },
     "file_path": { "type": "string" },
     "content_hash": { "type": "string" },
     "parser_version": { "type": "string" },
-    "error_type": { "type": "string" },
-    "message": { "type": "string" },
-    "line": { "type": ["integer", "null"] },
-    "column": { "type": ["integer", "null"] },
-    "retryable": { "type": "boolean" }
+    "error": {
+      "type": "object",
+      "required": [
+        "error_type",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "error_type": { "type": "string" },
+        "message": { "type": "string" },
+        "line": { "type": ["integer", "null"] },
+        "column": { "type": ["integer", "null"] },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

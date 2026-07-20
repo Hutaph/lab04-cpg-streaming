@@ -23,6 +23,9 @@ dev = [
     "mypy>=1.0.0"
 ]
 
+[project.scripts]
+lab04 = "cli.main:app"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["domain*", "application*", "parsing*", "infrastructure*", "cli*"]
