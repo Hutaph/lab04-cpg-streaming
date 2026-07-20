@@ -1,6 +1,6 @@
 """Handles graph diffing for modified files to identify deleted elements."""
 
-from src.domain.models import FileState, ParsedFileGraph, GraphDiff
+from domain.models import FileState, ParsedFileGraph, GraphDiff
 
 
 class CpgDiffer:

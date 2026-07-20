@@ -80,11 +80,11 @@ Task 1 (clone repo), Task 6 (verification), Architecture diagram, Jupyter Book v
 
 ## Quy ước đặt tên & thiết kế
 
-- **Topic Kafka:** `code.events.nodes`, `code.events.edges`, `code.events.metadata`, `code.events.errors` (đổi tên nếu người dùng đã quyết định khác trong `plan.md`/schema files — luôn kiểm tra `scripts/scripts/scripts/parser-service/schemas/` trước khi giả định tên topic).
-- **Stable ID:** `sha256(file_path + node_type + line_start + line_end + node_signature)`, cắt ngắn 16-24 ký tự hex nếu cần độ dài gọn.
-- **Schema versioning field:** luôn tên `schema_version`, giá trị dạng string `"v1"`, `"v2"`...
-- **Timestamp field:** luôn tên `event_timestamp`, ISO 8601 UTC.
-- **Commit message:** tiếng Việt hoặc Anh đều được, nhưng phải mô tả rõ theo dạng `[Task N] Mô tả ngắn` để phản ánh tiến độ theo từng task khi chấm bài (đề bài yêu cầu commit thể hiện tiến độ tăng dần, không phải 1 commit "final").
+- **Topic Kafka:** `cpg.nodes`, `cpg.edges`, `source.metadata`, `parser.errors`, `connector.errors` (đọc từ `config/topics.yaml`).
+- **Stable ID:** `sha256` của thuộc tính thực tế (đối chiếu `src/parsing/identifiers.py`).
+- **Schema versioning field:** luôn tên `schema_version`, giá trị dạng string `"1.0"`.
+- **Timestamp field:** luôn tên `event_time`, ISO 8601 UTC.
+- **Commit message:** tiếng Việt hoặc Anh đều được, nhưng phải mô tả rõ để phản ánh tiến độ theo từng task khi chấm bài (đề bài yêu cầu commit thể hiện tiến độ tăng dần, không phải 1 commit "final").
 
 ## Cách chạy môi trường (cập nhật khi docker-compose.yml đã có)
 
@@ -99,7 +99,7 @@ docker compose logs -f kafka
 docker compose down -v
 
 # Kiểm tra message trong 1 topic (đổi tên topic tương ứng)
-docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic code.events.nodes --from-beginning
+docker compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic cpg.nodes --from-beginning
 ```
 
 ## Trạng thái tiến độ hiện tại

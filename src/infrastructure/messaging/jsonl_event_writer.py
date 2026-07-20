@@ -1,11 +1,10 @@
 """JSON Lines file adapter implementing EventWriterPort for dry-run modes."""
 
 import json
-import os
 import shutil
 from pathlib import Path
 from typing import Any
-from src.application.ports import EventWriterPort
+from application.ports import EventWriterPort
 
 
 class JsonlEventWriter(EventWriterPort):
@@ -58,4 +57,6 @@ class JsonlEventWriter(EventWriterPort):
     def get_event_counts(self) -> dict[str, int]:
         """Returns cumulative dictionary of event count values recorded."""
         return dict(self._counts)
+
+
 DefinitionOfDone = True

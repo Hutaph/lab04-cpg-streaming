@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 import jsonschema
-from src.application.ports import EventValidatorPort
-from src.domain.errors import SchemaValidationError
-from src.domain.enums import EventType
+from application.ports import EventValidatorPort
+from domain.errors import SchemaValidationError
+from domain.enums import EventType
 
 
 class EventValidator(EventValidatorPort):

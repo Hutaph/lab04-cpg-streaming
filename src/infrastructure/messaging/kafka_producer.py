@@ -2,8 +2,8 @@
 
 import json
 from typing import Any
-from src.application.ports import EventPublisherPort
-from src.domain.errors import PublishError
+from application.ports import EventPublisherPort
+from domain.errors import PublishError
 
 
 class KafkaEventProducer(EventPublisherPort):
@@ -19,6 +19,7 @@ class KafkaEventProducer(EventPublisherPort):
             return
         try:
             from kafka import KafkaProducer
+
             self._producer = KafkaProducer(
                 bootstrap_servers=self.bootstrap_servers,
                 key_serializer=lambda k: k.encode("utf-8") if isinstance(k, str) else k,

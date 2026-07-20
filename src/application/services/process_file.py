@@ -1,10 +1,9 @@
 """Service to parse a single Python source file and publish CPG events."""
 
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from src.application.ports import (
+from application.ports import (
     SourceRepositoryPort,
     ParserPort,
     EventWriterPort,
@@ -12,12 +11,12 @@ from src.application.ports import (
     StateStorePort,
     EventValidatorPort,
 )
-from src.domain.models import SourceFile, ProcessingResult, FileState
-from src.domain.enums import ParseStatus, EventType
-from src.domain.events import EventFactory, EventEnvelope
-from src.domain.errors import ParsingError, PublishError, SchemaValidationError
-from src.parsing.identifiers import IdentifierGenerator
-from src.parsing.diff import CpgDiffer
+from domain.models import SourceFile, ProcessingResult
+from domain.enums import ParseStatus, EventType
+from domain.events import EventFactory, EventEnvelope
+from domain.errors import ParsingError, PublishError, SchemaValidationError
+from parsing.identifiers import IdentifierGenerator
+from parsing.diff import CpgDiffer
 
 
 class ProcessFileService:
@@ -49,14 +48,14 @@ class ProcessFileService:
     def _write(self, topic: str, file_id: str, event: dict[str, Any]) -> None:
         """Helper to invoke either EventWriterPort or EventPublisherPort dynamically."""
         if hasattr(self.writer, "publish_event"):
-            self.writer.publish_event(topic, file_id, event)  # type: ignore
+            self.writer.publish_event(topic, file_id, event)
         else:
-            self.writer.write_event(topic, file_id, event)  # type: ignore
+            self.writer.write_event(topic, file_id, event)
 
     def execute(self, source_file: SourceFile) -> ProcessingResult:
         """Parses a single file, publishes events to target destination, and commits SQLite state."""
         relative_path = Path(source_file.relative_path)
-        
+
         # 1. Read raw source bytes strict
         try:
             source_bytes = self.repo_adapter.read_file(relative_path)
@@ -109,16 +108,12 @@ class ProcessFileService:
         # 1. EDGE_DELETE events
         for e_id in diff.removed_edge_ids:
             evt_id = IdentifierGenerator.generate_event_id(EventType.EDGE_DELETE.value, e_id, content_hash)
-            events_to_send.append(
-                (self.topic_edges, factory.create_edge_delete(evt_id, event_time, e_id))
-            )
+            events_to_send.append((self.topic_edges, factory.create_edge_delete(evt_id, event_time, e_id)))
 
         # 2. NODE_DELETE events
         for n_id in diff.removed_node_ids:
             evt_id = IdentifierGenerator.generate_event_id(EventType.NODE_DELETE.value, n_id, content_hash)
-            events_to_send.append(
-                (self.topic_nodes, factory.create_node_delete(evt_id, event_time, n_id))
-            )
+            events_to_send.append((self.topic_nodes, factory.create_node_delete(evt_id, event_time, n_id)))
 
         # 3. NODE_UPSERT events
         for node in diff.current_nodes:
@@ -136,9 +131,7 @@ class ProcessFileService:
                 "column_end": node.column_end,
                 "properties": node.properties,
             }
-            events_to_send.append(
-                (self.topic_nodes, factory.create_node_upsert(evt_id, event_time, node_dict))
-            )
+            events_to_send.append((self.topic_nodes, factory.create_node_upsert(evt_id, event_time, node_dict)))
 
         # 4. EDGE_UPSERT events
         for edge in diff.current_edges:
@@ -150,9 +143,7 @@ class ProcessFileService:
                 "edge_type": edge.edge_type,
                 "properties": edge.properties,
             }
-            events_to_send.append(
-                (self.topic_edges, factory.create_edge_upsert(evt_id, event_time, edge_dict))
-            )
+            events_to_send.append((self.topic_edges, factory.create_edge_upsert(evt_id, event_time, edge_dict)))
 
         # 5. FILE_METADATA_UPSERT event
         meta = current_graph.metadata
@@ -169,9 +160,7 @@ class ProcessFileService:
             "parse_status": meta.parse_status.value,
             "parser": meta.parser,
         }
-        events_to_send.append(
-            (self.topic_metadata, factory.create_file_metadata_upsert(evt_id, event_time, meta_dict))
-        )
+        events_to_send.append((self.topic_metadata, factory.create_file_metadata_upsert(evt_id, event_time, meta_dict)))
 
         # Validate events
         serialized_events = []
@@ -185,7 +174,7 @@ class ProcessFileService:
             serialized_events.append((topic, evt_dict))
 
         # Publish/Write events and flush
-        counts = {}
+        counts: dict[str, int] = {}
         try:
             for topic, evt in serialized_events:
                 self._write(topic, file_id, evt)
@@ -220,7 +209,7 @@ class ProcessFileService:
         """Logs PARSER_ERROR event, validates, publishes, and avoids state commit."""
         relative_path = Path(source_file.relative_path)
         file_id = IdentifierGenerator.generate_file_id(source_file.repository_id, relative_path)
-        
+
         factory = EventFactory(
             repository_id=source_file.repository_id,
             commit_sha=source_file.commit_sha,

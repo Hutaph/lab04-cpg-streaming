@@ -1,9 +1,8 @@
 """Resolves call targets and builds call-graph connections (CALLS edges)."""
 
 import ast
-from typing import Any
-from src.domain.models import CodeNode, CodeEdge
-from src.parsing.identifiers import IdentifierGenerator
+from domain.models import CodeNode, CodeEdge
+from parsing.identifiers import IdentifierGenerator
 
 
 class CallBuilder:
@@ -79,7 +78,7 @@ class CallBuilder:
             if isinstance(node, ast.Call):
                 call_site_id = node_id_mapping[id(node)].node_id
                 call_text = get_call_name(node)
-                
+
                 if call_text:
                     target_id = None
                     resolution_type = "UNRESOLVED_DYNAMIC_CALL"
@@ -90,7 +89,7 @@ class CallBuilder:
                     if call_text in local_symbols:
                         target_id = local_symbols[call_text]
                         resolution_type = "LOCAL_FUNCTION"
-                    
+
                     # Class 2: Imported symbol
                     elif call_text in imported_symbols:
                         qualified_name, resolution_type = imported_symbols[call_text]

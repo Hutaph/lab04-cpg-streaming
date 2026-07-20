@@ -4,9 +4,9 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from src.application.ports import StateStorePort
-from src.domain.models import FileState
-from src.domain.errors import StateStoreError
+from application.ports import StateStorePort
+from domain.models import FileState
+from domain.errors import StateStoreError
 
 
 class SqliteStateStore(StateStorePort):

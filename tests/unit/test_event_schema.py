@@ -2,9 +2,8 @@
 
 from pathlib import Path
 import pytest
-from src.domain.enums import EventType
-from src.infrastructure.messaging.event_validator import EventValidator
-from src.domain.errors import SchemaValidationError
+from infrastructure.messaging.event_validator import EventValidator
+from domain.errors import SchemaValidationError
 
 
 def test_schema_validations() -> None:
@@ -37,8 +36,8 @@ def test_schema_validations() -> None:
             "column_start": 0,
             "line_end": 5,
             "column_end": 0,
-            "properties": {"foo": "bar"}
-        }
+            "properties": {"foo": "bar"},
+        },
     }
     validator.validate("NODE_UPSERT", node_event)
 
@@ -54,9 +53,7 @@ def test_schema_validations() -> None:
         "file_path": "foo.py",
         "content_hash": "h1",
         "parser_version": "1.0.0",
-        "node": {
-            "node_id": "n1"
-        }
+        "node": {"node_id": "n1"},
     }
     validator.validate("NODE_DELETE", node_delete)
 
@@ -65,4 +62,6 @@ def test_schema_validations() -> None:
     del invalid_event["node"]["node_id"]  # Missing required field
     with pytest.raises(SchemaValidationError):
         validator.validate("NODE_UPSERT", invalid_event)
+
+
 DefinitionOfDone = True

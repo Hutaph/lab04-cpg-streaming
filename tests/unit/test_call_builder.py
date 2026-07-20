@@ -1,8 +1,8 @@
 """Unit tests for Call-graph resolution logic."""
 
 import ast
-from src.parsing.ast_builder import AstBuilder
-from src.parsing.call_builder import CallBuilder
+from parsing.ast_builder import AstBuilder
+from parsing.call_builder import CallBuilder
 
 
 def test_function_call_resolution() -> None:

@@ -1,25 +1,25 @@
 """Unit tests for ProcessFileService execution flows."""
 
-from pathlib import Path
 from unittest.mock import Mock
 import pytest
-from src.application.services.process_file import ProcessFileService
-from src.domain.models import SourceFile, FileState, ParsedFileGraph, FileMetadata
-from src.domain.enums import ParseStatus
-from src.domain.errors import PublishError
+from application.services.process_file import ProcessFileService
+from domain.models import SourceFile, FileState, ParsedFileGraph, FileMetadata
+from domain.enums import ParseStatus
+from domain.errors import PublishError
 
 
 def test_unchanged_skip_flow() -> None:
     """Verify that if the content hash matches the database state, skip is returned."""
     repo = Mock()
     repo.read_file.return_value = b"x = 1"
-    
+
     state = Mock()
     state.get.return_value = FileState("file_id", "hash_abc", [], [])
 
     # The computed hash of b"x = 1" is "a053...". We force mocking to return equal hash
     # Or we can let it calculate naturally
     import hashlib
+
     content_hash = hashlib.sha256(b"x = 1").hexdigest()
     state.get.return_value = FileState("file_id", content_hash, [], [])
 
@@ -64,7 +64,8 @@ def test_writer_failure_does_not_commit() -> None:
     )
 
     validator = Mock()
-    from src.application.ports import EventWriterPort
+    from application.ports import EventWriterPort
+
     writer = Mock(spec=EventWriterPort)
     # Force writer to raise exception on event write/publish
     writer.write_event.side_effect = Exception("Kafka Down")

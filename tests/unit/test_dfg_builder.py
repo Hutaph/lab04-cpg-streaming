@@ -1,8 +1,8 @@
 """Unit tests for DFG variable reachability tracing."""
 
 import ast
-from src.parsing.ast_builder import AstBuilder
-from src.parsing.dfg_builder import DfgBuilder
+from parsing.ast_builder import AstBuilder
+from parsing.dfg_builder import DfgBuilder
 
 
 def test_variable_reachability() -> None:
@@ -20,7 +20,7 @@ def test_variable_reachability() -> None:
     # Should establish DFG_DEF_USE edges
     assert len(dfg_edges) == 2
     assert all(e.edge_type == "DFG_DEF_USE" for e in dfg_edges)
-    
+
     # Assert properties
     assert dfg_edges[0].properties["variable"] == "a"
     assert dfg_edges[1].properties["variable"] == "b"

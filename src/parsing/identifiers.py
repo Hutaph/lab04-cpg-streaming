@@ -15,13 +15,13 @@ class IdentifierGenerator:
         """
         # Ensure path is converted to a POSIX path format with forward slashes
         path_str = str(file_path).replace("\\", "/")
-        
+
         # Check and clean directory traversal risks
         if path_str.startswith("../") or "/../" in path_str:
             raise ValueError(f"Path contains invalid directory traversal: {path_str}")
         if Path(path_str).is_absolute():
             raise ValueError(f"Absolute path is not allowed: {path_str}")
-            
+
         return path_str
 
     @classmethod

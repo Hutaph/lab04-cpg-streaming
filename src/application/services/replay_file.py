@@ -2,13 +2,11 @@
 
 from pathlib import Path
 from typing import Any
-from src.application.ports import SourceRepositoryPort, ParserPort, StateStorePort
-from src.application.services.process_file import ProcessFileService
-from src.domain.models import SourceFile
-from src.domain.enums import ParseStatus
-from src.domain.errors import RepositoryNotFoundError
-from src.parsing.identifiers import IdentifierGenerator
-from src.parsing.diff import CpgDiffer
+from application.ports import SourceRepositoryPort, ParserPort, StateStorePort
+from application.services.process_file import ProcessFileService
+from domain.models import SourceFile
+from parsing.identifiers import IdentifierGenerator
+from parsing.diff import CpgDiffer
 
 
 class ReplayFileService:
@@ -48,14 +46,13 @@ class ReplayFileService:
         )
 
         file_id = IdentifierGenerator.generate_file_id(self.repository_id, relative_file_path)
-        
+
         # 2. Load previous state
         prev_state = self.state_store.get(file_id)
         old_hash = prev_state.content_hash if prev_state else "None"
 
         # Calculate new hash
         source_bytes = self.repo_adapter.read_file(relative_file_path)
-        new_hash = IdentifierGenerator.generate_content_hash(source_bytes)
 
         # 3. Simulate diff count first for returning metrics
         removed_nodes = 0

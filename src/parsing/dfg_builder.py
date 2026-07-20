@@ -1,9 +1,8 @@
 """Builds data-flow graphs (DFG) representing def-use relations of variables."""
 
 import ast
-from typing import Any
-from src.domain.models import CodeNode, CodeEdge
-from src.parsing.identifiers import IdentifierGenerator
+from domain.models import CodeNode, CodeEdge
+from parsing.identifiers import IdentifierGenerator
 
 
 class DfgBuilder:
@@ -171,7 +170,7 @@ class DfgBuilder:
                 analyze_scope(n, "Module")
             elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 mapped_node = node_id_mapping.get(id(n))
-                scope_name = mapped_node.qualified_name if mapped_node else n.name
+                scope_name = mapped_node.qualified_name if (mapped_node and mapped_node.qualified_name) else n.name
                 analyze_scope(n, scope_name)
 
         return dfg_edges

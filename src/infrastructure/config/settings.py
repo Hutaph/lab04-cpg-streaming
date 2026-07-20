@@ -149,7 +149,4 @@ def load_settings(config_path: Path | None = None) -> Settings:
     if repo_path:
         yaml_data.setdefault("source_repository", {})["path"] = repo_path
 
-    repo_id = os.getenv("SOURCE_REPOSITORY_ID")
-    # Bind to custom field if needed, or mapping repository_id
-
     return Settings(**yaml_data)

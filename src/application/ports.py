@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from typing import Any, Protocol
-from src.domain.models import FileState, ParsedFileGraph
+from domain.models import FileState, ParsedFileGraph
 
 
 class SourceRepositoryPort(Protocol):

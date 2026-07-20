@@ -3,15 +3,15 @@
 import ast
 import time
 from pathlib import Path
-from src.domain.models import ParsedFileGraph, SourceFile
-from src.domain.enums import ParseStatus
-from src.domain.errors import ParsingError
-from src.parsing.ast_builder import AstBuilder
-from src.parsing.cfg_builder import CfgBuilder
-from src.parsing.dfg_builder import DfgBuilder
-from src.parsing.call_builder import CallBuilder
-from src.parsing.metadata import MetadataExtractor
-from src.parsing.identifiers import IdentifierGenerator
+from domain.models import ParsedFileGraph, SourceFile
+from domain.enums import ParseStatus
+from domain.errors import ParsingError
+from parsing.ast_builder import AstBuilder
+from parsing.cfg_builder import CfgBuilder
+from parsing.dfg_builder import DfgBuilder
+from parsing.call_builder import CallBuilder
+from parsing.metadata import MetadataExtractor
+from parsing.identifiers import IdentifierGenerator
 
 
 class CpgParser:
@@ -92,7 +92,7 @@ class CpgParser:
             repository_root="",
             relative_path=str(relative_path),
             commit_sha=commit_sha,
-            size_bytes=len(source_code)
+            size_bytes=len(source_code),
         )
 
         return ParsedFileGraph(

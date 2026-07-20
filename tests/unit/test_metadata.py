@@ -1,7 +1,7 @@
 """Unit tests for metadata stats extraction logic."""
 
-from src.parsing.metadata import MetadataExtractor
-from src.domain.enums import ParseStatus
+from parsing.metadata import MetadataExtractor
+from domain.enums import ParseStatus
 
 
 def test_metadata_extraction() -> None:

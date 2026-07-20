@@ -115,11 +115,7 @@ Tài liệu này chi tiết hóa cấu trúc thư mục của dự án và các 
 │       └── init/
 │           └── indexes.js      # Khởi tạo unique indexes cho metadata db
 │
-├── scripts/                    # Thư mục scripts tiện ích và prototype code
-│   ├── explore_repo.py
-│   ├── parser-service/         # Giữ nguyên toàn bộ code cũ của nhóm
-│   │   └── ...
-│   │
+├── scripts/                    # Thư mục scripts tiện ích và wrappers
 │   ├── clone_source_repo.sh
 │   ├── create_topics.sh
 │   ├── register_connectors.sh
@@ -144,7 +140,7 @@ Tài liệu này chi tiết hóa cấu trúc thư mục của dự án và các 
 │   └── screenshots/
 │
 └── workspace/                  # Thư mục runtime lưu trữ tạm thời (Gitignored)
-    ├── source/                 # Nơi clone shallow repotransformers-pr-agent
+    ├── source/                 # Nơi clone shallow repository
     ├── state/                  # Lưu trữ file sqlite state DB
     ├── checkpoints/            # Spark streaming checkpoint
     ├── logs/                   # Log file chạy dịch vụ
@@ -157,7 +153,7 @@ Tài liệu này chi tiết hóa cấu trúc thư mục của dự án và các 
 - **`src/`**: Thư mục chứa mã nguồn chính của ứng dụng parser, được tổ chức theo kiến trúc phân lớp (Hexagonal Architecture / Ports & Adapters).
 - **`spark_jobs/`**: Chứa code xử lý dữ liệu streaming của Spark, tách biệt hoàn toàn khỏi ứng dụng parser vì chạy trong môi trường Spark Cluster/Submit riêng.
 - **`infra/`**: Chứa Docker Compose cấu hình hạ tầng cùng các tài nguyên setup cơ sở dữ liệu.
-- **`scripts/`**: Chứa các script tự động hóa chạy các phase và giữ lại mã nguồn prototype cũ để đối chiếu.
+- **`scripts/`**: Chứa các script tự động hóa chạy các phase và wrappers mỏng.
 - **`tests/`**: Tổ chức kiểm thử đa tầng (Unit, Integration, E2E).
 - **`workspace/` & `artifacts/`**: Chứa dữ liệu sinh ra trong quá trình chạy thực tế.
 
@@ -184,7 +180,6 @@ Tài liệu này chi tiết hóa cấu trúc thư mục của dự án và các 
   - Thư mục dữ liệu volume của Neo4j và MongoDB (ngăn rò rỉ dữ liệu lớn hoặc xung đột file khóa DB).
   - Tệp `.env` chứa mật khẩu/credential thật.
 
-## 5. Trạng thái của Mã nguồn cũ (Prototype)
-- **Vị trí hiện tại**: Toàn bộ mã nguồn cũ do nhóm phát triển trước đó được giữ nguyên vẹn tại `scripts/parser-service/`.
-- **Lý do giữ lại**: Đảm bảo không làm ảnh hưởng đến mã nguồn hoạt động của nhóm trong phase thiết lập cấu trúc nền tảng và cung cấp tài liệu đối chiếu (Traceability) rõ ràng cho giai đoạn refactor tiếp theo.
-- **Kế hoạch chuyển đổi**: Ở phase sau, logic từ các file prototype này sẽ được refactor một cách cẩn thận và chuyển dịch sang cấu trúc phân lớp tương ứng dưới `src/` (chi tiết tại `docs/refactor_mapping.md`).
+## 5. Lịch sử di chuyển Mã nguồn cũ (Prototype)
+- **Trạng thái di dời**: Toàn bộ mã nguồn prototype tại `scripts/parser-service/` và `scripts/explore_repo.py` đã được di dời sang cấu trúc mới dưới `src/` và xóa bỏ hoàn toàn khỏi `scripts/` sau khi kiểm thử và xác minh thành công.
+- **Tài liệu tham chiếu**: Chi tiết bảng mapping các thành phần prototype cũ sang module mới được lưu trữ tại [refactor_mapping.md](file:///home/phat/AI_Project/lab04-cpg-streaming/docs/refactor_mapping.md) phục vụ mục đích Traceability.

@@ -1,8 +1,8 @@
 """Application service to list and filter source files within the repository."""
 
 from pathlib import Path
-from src.application.ports import SourceRepositoryPort, ManifestWriterPort
-from src.domain.models import SourceFile
+from application.ports import SourceRepositoryPort, ManifestWriterPort
+from domain.models import SourceFile
 
 
 class DiscoverRepositoryService:
@@ -22,7 +22,7 @@ class DiscoverRepositoryService:
         """Clones if necessary, scans directory structures, logs manifest, and returns SourceFiles."""
         # 1. Clone repository
         self.repo_adapter.clone_repository()
-        
+
         # 2. Get active commit hash
         commit_sha = self.repo_adapter.get_commit_hash()
 
@@ -61,23 +61,27 @@ class DiscoverRepositoryService:
             if not included:
                 reason = "Excluded by filter pattern configuration matches"
 
-            records.append({
-                "repository_id": self.repository_id,
-                "commit_sha": commit_sha,
-                "file_path": posix_path,
-                "size_bytes": size,
-                "included": included,
-                "exclusion_reason": reason
-            })
+            records.append(
+                {
+                    "repository_id": self.repository_id,
+                    "commit_sha": commit_sha,
+                    "file_path": posix_path,
+                    "size_bytes": size,
+                    "included": included,
+                    "exclusion_reason": reason,
+                }
+            )
 
             if included:
-                source_files.append(SourceFile(
-                    repository_id=self.repository_id,
-                    repository_root=str(self.repo_adapter.resolve_path(Path(""))),
-                    relative_path=posix_path,
-                    commit_sha=commit_sha,
-                    size_bytes=size
-                ))
+                source_files.append(
+                    SourceFile(
+                        repository_id=self.repository_id,
+                        repository_root=str(self.repo_adapter.resolve_path(Path(""))),
+                        relative_path=posix_path,
+                        commit_sha=commit_sha,
+                        size_bytes=size,
+                    )
+                )
 
         self.manifest_writer.write_manifest(records)
         return source_files
@@ -86,6 +90,7 @@ class DiscoverRepositoryService:
 def os_walk_helper(dir_path: Path) -> list[tuple[str, list[str], list[str]]]:
     """Helper utilizing os.walk to avoid recursion limit depth issues."""
     import os
+
     results = []
     for root, dirs, files in os.walk(str(dir_path)):
         # Avoid traversing hidden folders like .git

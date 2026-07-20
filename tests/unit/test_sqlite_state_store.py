@@ -1,8 +1,7 @@
 """Unit tests for SQLite state store adapter."""
 
-import os
 from pathlib import Path
-from src.infrastructure.state.sqlite_state_store import SqliteStateStore
+from infrastructure.state.sqlite_state_store import SqliteStateStore
 
 
 def test_sqlite_state_store_flow(tmp_path: Path) -> None:
@@ -23,7 +22,7 @@ def test_sqlite_state_store_flow(tmp_path: Path) -> None:
     state = store.get(file_id)
     assert state is not None
     assert state.content_hash == "hash_v1"
-    
+
     # Assert JSON lists are stored sorted deterministically
     assert state.node_ids == ["n1", "n2"]
     assert state.edge_ids == ["e1", "e2"]

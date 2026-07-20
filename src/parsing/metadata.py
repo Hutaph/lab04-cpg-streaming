@@ -1,8 +1,8 @@
 """Extracts metadata statistics from Python source code files using AST analysis."""
 
 import ast
-from src.domain.models import FileMetadata
-from src.domain.enums import ParseStatus
+from domain.models import FileMetadata
+from domain.enums import ParseStatus
 
 
 class MetadataExtractor:
@@ -22,7 +22,7 @@ class MetadataExtractor:
     ) -> FileMetadata:
         """Parses the text and returns a populated FileMetadata object."""
         size_bytes = len(source_code)
-        
+
         # Calculate line count properly
         source_text = source_code.decode("utf-8", errors="replace")
         if not source_text:

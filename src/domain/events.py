@@ -1,8 +1,8 @@
 """Domain events representing updates to the Code Property Graph."""
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Any
-from src.domain.enums import EventType
+from domain.enums import EventType
 
 
 @dataclass(frozen=True, slots=True)

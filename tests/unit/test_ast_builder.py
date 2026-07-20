@@ -1,7 +1,7 @@
 """Unit tests for AST Node and Edge generation."""
 
 import ast
-from src.parsing.ast_builder import AstBuilder
+from parsing.ast_builder import AstBuilder
 
 
 def test_simple_ast_construction() -> None:

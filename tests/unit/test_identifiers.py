@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import pytest
-from src.parsing.identifiers import IdentifierGenerator
+from parsing.identifiers import IdentifierGenerator
 
 
 def test_path_normalization() -> None:

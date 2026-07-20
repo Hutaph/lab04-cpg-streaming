@@ -4,19 +4,20 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 import typer
-from src.infrastructure.config.settings import load_settings
-from src.infrastructure.filesystem.git_source_repository import GitSourceRepository
-from src.infrastructure.filesystem.manifest_writer import ManifestWriter
-from src.infrastructure.messaging.event_validator import EventValidator
-from src.infrastructure.messaging.jsonl_event_writer import JsonlEventWriter
-from src.infrastructure.messaging.kafka_producer import KafkaEventProducer
-from src.infrastructure.state.sqlite_state_store import SqliteStateStore
-from src.parsing.cpg_parser import CpgParser
-from src.application.services.discover_repository import DiscoverRepositoryService
-from src.application.services.process_file import ProcessFileService
-from src.application.services.process_repository import ProcessRepositoryService
-from src.application.services.replay_file import ReplayFileService
-from src.domain.models import SourceFile
+from infrastructure.config.settings import load_settings
+from infrastructure.filesystem.git_source_repository import GitSourceRepository
+from infrastructure.filesystem.manifest_writer import ManifestWriter
+from infrastructure.messaging.event_validator import EventValidator
+from infrastructure.messaging.jsonl_event_writer import JsonlEventWriter
+from infrastructure.messaging.kafka_producer import KafkaEventProducer
+from infrastructure.state.sqlite_state_store import SqliteStateStore
+from parsing.cpg_parser import CpgParser
+from application.services.discover_repository import DiscoverRepositoryService
+from application.services.process_file import ProcessFileService
+from application.services.process_repository import ProcessRepositoryService
+from application.services.replay_file import ReplayFileService
+from application.ports import EventWriterPort, EventPublisherPort
+from domain.models import SourceFile
 
 app = typer.Typer(help="CPG Stream Ingestion Pipeline CLI Commands")
 
@@ -54,13 +55,14 @@ def get_adapters(
         schemas_dir = Path("../schemas")
     validator = EventValidator(schemas_dir=schemas_dir)
 
+    writer: EventWriterPort | EventPublisherPort
     if dry_run:
         target_out = out_dir if out_dir else Path("workspace/tmp/parser-output")
         writer = JsonlEventWriter(output_dir=target_out)
         if clean_output:
             writer.clean()
     else:
-        writer = KafkaEventProducer(bootstrap_servers=settings.kafka.bootstrap_servers)  # type: ignore
+        writer = KafkaEventProducer(bootstrap_servers=settings.kafka.bootstrap_servers)
 
     return repo_adapter, state_store, validator, writer, repository_id
 
@@ -85,7 +87,9 @@ def clone_source(
 @app.command()
 def discover(
     scope: str = typer.Option("final", help="File filter scope: final or smoke"),
-    manifest: Path = typer.Option(Path("artifacts/manifests/source-files.jsonl"), help="Path to write manifest audit JSONL"),
+    manifest: Path = typer.Option(
+        Path("artifacts/manifests/source-files.jsonl"), help="Path to write manifest audit JSONL"
+    ),
     config: Optional[Path] = typer.Option(None, help="Path to config YAML file"),
 ) -> None:
     """Scans repository files and logs files manifest JSONL."""
@@ -99,7 +103,7 @@ def discover(
         target_commit=settings.source_repository.commit,
     )
     manifest_writer = ManifestWriter(manifest_file_path=manifest)
-    
+
     service = DiscoverRepositoryService(
         repo_adapter=repo_adapter,
         manifest_writer=manifest_writer,

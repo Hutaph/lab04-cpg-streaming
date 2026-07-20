@@ -2,10 +2,10 @@
 
 import time
 from typing import Any
-from src.application.services.discover_repository import DiscoverRepositoryService
-from src.application.services.process_file import ProcessFileService
-from src.domain.enums import ParseStatus
-from src.infrastructure.observability.logging import setup_logger
+from application.services.discover_repository import DiscoverRepositoryService
+from application.services.process_file import ProcessFileService
+from domain.enums import ParseStatus
+from infrastructure.observability.logging import setup_logger
 
 logger = setup_logger("process_repository")
 
@@ -49,7 +49,7 @@ class ProcessRepositoryService:
         error_events = 0
 
         logger.info(f"Starting parsing loop for {eligible_count} eligible files...")
-        
+
         for sf in source_files:
             file_path = sf.relative_path
             try:
@@ -62,10 +62,7 @@ class ProcessRepositoryService:
                     node_events += res.emitted_event_counts.get(self.process_file_service.topic_nodes, 0)
                     edge_events += res.emitted_event_counts.get(self.process_file_service.topic_edges, 0)
                     metadata_events += res.emitted_event_counts.get(self.process_file_service.topic_metadata, 0)
-                    logger.info(
-                        f"Parsed successfully: {file_path} "
-                        f"(nodes={res.node_count}, edges={res.edge_count})"
-                    )
+                    logger.info(f"Parsed successfully: {file_path} (nodes={res.node_count}, edges={res.edge_count})")
                 else:
                     failed += 1
                     error_events += 1

@@ -1,7 +1,8 @@
 """Domain models for CPG parser status and entities."""
 
 from dataclasses import dataclass, field
-from src.domain.enums import ParseStatus
+from typing import Any
+from domain.enums import ParseStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +30,7 @@ class CodeNode:
     column_start: int | None
     line_end: int | None
     column_end: int | None
-    properties: dict = field(default_factory=dict)
+    properties: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +42,7 @@ class CodeEdge:
     source_id: str
     target_id: str
     edge_type: str
-    properties: dict = field(default_factory=dict)
+    properties: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

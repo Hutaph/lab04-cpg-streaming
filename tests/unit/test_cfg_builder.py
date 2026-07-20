@@ -1,8 +1,8 @@
 """Unit tests for CFG builder next execution transitions."""
 
 import ast
-from src.parsing.ast_builder import AstBuilder
-from src.parsing.cfg_builder import CfgBuilder
+from parsing.ast_builder import AstBuilder
+from parsing.cfg_builder import CfgBuilder
 
 
 def test_sequential_cfg() -> None:
@@ -10,7 +10,7 @@ def test_sequential_cfg() -> None:
     source = "x = 1\ny = 2\nprint(y)"
     tree = ast.parse(source)
     file_id = "test_file_id"
-    
+
     ast_builder = AstBuilder()
     cfg_builder = CfgBuilder()
 

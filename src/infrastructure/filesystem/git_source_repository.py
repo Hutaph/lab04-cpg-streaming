@@ -5,8 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 import yaml
-from src.application.ports import SourceRepositoryPort
-from src.domain.errors import RepositoryNotFoundError, ParsingError
+from application.ports import SourceRepositoryPort
+from domain.errors import RepositoryNotFoundError, ParsingError
 
 
 class GitSourceRepository(SourceRepositoryPort):
@@ -39,9 +39,7 @@ class GitSourceRepository(SourceRepositoryPort):
                     capture_output=True,
                 )
         except subprocess.CalledProcessError as exc:
-            raise RepositoryNotFoundError(
-                f"Failed to clone repository from {self.clone_url}: {exc.stderr}"
-            ) from exc
+            raise RepositoryNotFoundError(f"Failed to clone repository from {self.clone_url}: {exc.stderr}") from exc
 
     def get_commit_hash(self) -> str:
         """Runs git rev-parse HEAD to discover current commit SHA."""
@@ -74,8 +72,8 @@ class GitSourceRepository(SourceRepositoryPort):
             filter_path = Path("../config/file_filters.yaml")
 
         scope = os.getenv("PARSER_SCOPE", "final")
-        include_patterns = ["**/*.py"]
-        exclude_patterns = []
+        include_patterns: list[str] = ["**/*.py"]
+        exclude_patterns: list[str] = []
 
         if filter_path.exists():
             with open(filter_path, "r", encoding="utf-8") as f:
@@ -134,4 +132,6 @@ class GitSourceRepository(SourceRepositoryPort):
             raise ParsingError(f"File {relative_path} is not valid UTF-8.") from exc
         except Exception as exc:
             raise ParsingError(f"Failed to read file {relative_path}: {exc}") from exc
+
+
 DefinitionOfDone = True

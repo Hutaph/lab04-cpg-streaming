@@ -1,8 +1,8 @@
 """Unit tests for graph diffing logic (detecting deleted nodes and edges)."""
 
-from src.parsing.diff import CpgDiffer
-from src.domain.models import FileState, ParsedFileGraph, CodeNode, CodeEdge, FileMetadata, SourceFile
-from src.domain.enums import ParseStatus
+from parsing.diff import CpgDiffer
+from domain.models import FileState, ParsedFileGraph, CodeNode, CodeEdge, FileMetadata, SourceFile
+from domain.enums import ParseStatus
 
 
 def test_diff_deletions() -> None:

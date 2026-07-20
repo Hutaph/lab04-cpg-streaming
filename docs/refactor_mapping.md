@@ -1,6 +1,9 @@
-# Kế hoạch Refactor và Mapping Mã nguồn Prototype
+# Kế hoạch Refactor và Mapping Mã nguồn Prototype (ĐÃ HOÀN THÀNH)
 
-Tài liệu này phân tích cấu trúc mã nguồn prototype hiện có tại `scripts/` và thiết lập kế hoạch chuyển đổi, phân tách trách nhiệm sang cấu trúc phân lớp mới dưới `src/`.
+> [!NOTE]
+> Quá trình di dời và refactor mã nguồn prototype mô tả dưới đây đã được thực hiện và xác minh thành công 100%. Toàn bộ mã nguồn cũ tại `scripts/parser-service/` và `scripts/explore_repo.py` đã được di dời sang `src/` và xóa bỏ hoàn toàn.
+
+Tài liệu này lưu trữ phân tích cấu trúc mã nguồn prototype cũ tại `scripts/` phục vụ mục đích Traceability và đối chiếu trong kiến trúc phân lớp mới dưới `src/`.
 
 ---
 

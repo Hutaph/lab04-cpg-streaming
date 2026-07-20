@@ -1,8 +1,8 @@
 """Builds statement-level control-flow graphs (CFG) for Python scopes."""
 
 import ast
-from src.domain.models import CodeNode, CodeEdge
-from src.parsing.identifiers import IdentifierGenerator
+from domain.models import CodeNode, CodeEdge
+from parsing.identifiers import IdentifierGenerator
 
 
 class CfgBuilder:
@@ -108,7 +108,7 @@ class CfgBuilder:
                         true_targets = build_block_cfg(stmt.body, current_next, break_ids, continue_ids)
                         for t in true_targets:
                             add_edge(stmt_id, t, "CFG_TRUE")
-                        
+
                         # False branch
                         false_targets = build_block_cfg(stmt.orelse, current_next, break_ids, continue_ids)
                         for f in false_targets:
@@ -172,8 +172,8 @@ class CfgBuilder:
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # Locate parents to compute qualified scope
                 mapped_node = node_id_mapping.get(id(node))
-                scope_name = mapped_node.qualified_name if mapped_node else node.name
-                ast_path = mapped_node.ast_path if mapped_node else node.name
+                scope_name = mapped_node.qualified_name if (mapped_node and mapped_node.qualified_name) else node.name
+                ast_path = mapped_node.ast_path if (mapped_node and mapped_node.ast_path) else node.name
                 process_scope(node.body, scope_name, ast_path)
 
         return synthetic_nodes, cfg_edges

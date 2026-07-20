@@ -7,7 +7,7 @@ from pathlib import Path
 src_path = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-from cli.main import app
+from cli.main import app  # noqa: E402
 
 if __name__ == "__main__":
     # Prepend 'discover' command arguments dynamically

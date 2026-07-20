@@ -8,7 +8,7 @@ def setup_logger(name: str = "cpg_streaming", level: int = logging.INFO) -> Any:
     """Configures structured console logging helper."""
     try:
         import structlog
-        
+
         # Configure structlog to write clean formatted outputs
         structlog.configure(
             processors=[
@@ -16,7 +16,7 @@ def setup_logger(name: str = "cpg_streaming", level: int = logging.INFO) -> Any:
                 structlog.processors.TimeStamper(fmt="iso"),
                 structlog.processors.StackInfoRenderer(),
                 structlog.processors.format_exc_info,
-                structlog.dev.ConsoleRenderer()
+                structlog.dev.ConsoleRenderer(),
             ],
             wrapper_class=structlog.make_filtering_bound_logger(level),
             context_class=dict,
@@ -30,9 +30,7 @@ def setup_logger(name: str = "cpg_streaming", level: int = logging.INFO) -> Any:
         logger.setLevel(level)
         if not logger.handlers:
             handler = logging.StreamHandler()
-            formatter = logging.Formatter(
-                "[%(asctime)s] %(levelname)s [%(name)s] %(message)s"
-            )
+            formatter = logging.Formatter("[%(asctime)s] %(levelname)s [%(name)s] %(message)s")
             handler.setFormatter(formatter)
             logger.addHandler(handler)
         return logger

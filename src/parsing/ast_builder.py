@@ -2,14 +2,14 @@
 
 import ast
 from typing import Any
-from src.domain.models import CodeNode, CodeEdge
-from src.parsing.identifiers import IdentifierGenerator
+from domain.models import CodeNode, CodeEdge
+from parsing.identifiers import IdentifierGenerator
 
 
 class AstBuilder:
     """Traverses Python AST to construct CodeNode and CPG AST child edges."""
 
-    def build(self, tree: ast.AST, file_id: str) -> tuple[list[CodeNode], list[CodeEdge], dict[int, str]]:
+    def build(self, tree: ast.AST, file_id: str) -> tuple[list[CodeNode], list[CodeEdge], dict[int, CodeNode]]:
         """Parses the AST tree and returns lists of CodeNodes, CodeEdges, and a mapping of object_id to node_id."""
         nodes: dict[str, CodeNode] = {}
         edges: dict[str, CodeEdge] = {}
@@ -43,7 +43,7 @@ class AstBuilder:
             )
 
             # Node properties extraction
-            properties = {}
+            properties: dict[str, Any] = {}
             if isinstance(node, ast.Constant):
                 properties["value_type"] = type(node.value).__name__
                 properties["has_value"] = node.value is not None
@@ -53,7 +53,12 @@ class AstBuilder:
             line_end = getattr(node, "end_lineno", None)
             column_end = getattr(node, "end_col_offset", None)
 
-            name = getattr(node, "name", None) or getattr(node, "id", None) or getattr(node, "arg", None) or getattr(node, "attr", None)
+            name = (
+                getattr(node, "name", None)
+                or getattr(node, "id", None)
+                or getattr(node, "arg", None)
+                or getattr(node, "attr", None)
+            )
             if isinstance(node, ast.Module):
                 name = "Module"
             if name is not None:
@@ -100,7 +105,7 @@ class AstBuilder:
                         semantic_key=get_semantic_key(value),
                         ast_path=child_path,
                     )
-                    
+
                     # Create AST_CHILD edge
                     role = f"{field_name}|0"
                     edge_id = IdentifierGenerator.generate_edge_id(node_id, "AST_CHILD", child_id, role)
@@ -126,7 +131,7 @@ class AstBuilder:
                                 semantic_key=get_semantic_key(child_node),
                                 ast_path=child_path,
                             )
-                            
+
                             role = f"{field_name}|{index}"
                             edge_id = IdentifierGenerator.generate_edge_id(node_id, "AST_CHILD", child_id, role)
                             if edge_id not in edges:
