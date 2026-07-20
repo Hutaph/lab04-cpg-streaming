@@ -40,12 +40,12 @@ jobs:
 
       - name: Build Jupyter Book site
         working-directory: lab04-book
-        run: myst build --site
+        run: myst build --html --force
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: lab04-book/_build/site
+          path: lab04-book/_build/html
 
       - name: Deploy to GitHub Pages
         id: deployment
