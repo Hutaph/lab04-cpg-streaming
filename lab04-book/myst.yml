@@ -25,6 +25,12 @@ project:
     - file: index.md
     - file: task1_clone_explore.ipynb
     - file: task2_parser_service.ipynb
+    - file: task3_kafka_topics.md
+    - file: task4_neo4j_ingestion.md
+    - file: task5_spark_mongodb.md
+    - file: task6_idempotent_replay.md
+    - file: architecture.md
+    - file: reflection.md
 site:
   template: book-theme
   options:

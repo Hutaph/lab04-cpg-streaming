@@ -1,0 +1,37 @@
+# Kafka Topics Layout Definition
+
+topics:
+  - name: "cpg.nodes"
+    partitions: 3  # TODO: Verify sizing during implementation
+    replication_factor: 1  # TODO: Upgrade for clustered environment
+    key: "id"  # stable hash-based node ID
+    purpose: "Transfers code syntax property graph node vertices"
+    consumer: "Neo4j Kafka Sink Connector"
+
+  - name: "cpg.edges"
+    partitions: 3
+    replication_factor: 1
+    key: "id"  # stable hash-based edge ID
+    purpose: "Transfers graph connectivity relationships (AST, CFG, DFG, CALLS)"
+    consumer: "Neo4j Kafka Sink Connector"
+
+  - name: "source.metadata"
+    partitions: 1
+    replication_factor: 1
+    key: "file_path"  # partition key matches file identifier
+    purpose: "Transfers code file parsing statistics and counts"
+    consumer: "Spark Structured Streaming Job"
+
+  - name: "parser.errors"
+    partitions: 1
+    replication_factor: 1
+    key: "id"
+    purpose: "Dead letter queue for syntax and parser failures"
+    consumer: "Audit Logs / Monitoring"
+
+  - name: "connector.errors"
+    partitions: 1
+    replication_factor: 1
+    key: "id"
+    purpose: "Kafka Connect sink write failure logging"
+    consumer: "Infrastructure alert monitoring"

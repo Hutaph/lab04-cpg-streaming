@@ -29,6 +29,19 @@ Task 1 (clone repo), Task 6 (verification), Architecture diagram, Jupyter Book v
 5. **Idempotency là yêu cầu bắt buộc xuyên suốt**, không phải optional — mọi node/edge phải có stable ID (hash-based), mọi write vào Neo4j dùng `MERGE`, mọi Spark writeStream phải có `checkpointLocation`.
 6. **Comment code song ngữ hoặc tiếng Việt là được** — người dùng ưu tiên hiểu rõ hơn là code "chuẩn enterprise".
 7. **Luôn trả lời tôi bằng Tiếng Việt**: Dù người dùng có prompt bằng Tiếng anh hay Tiếng việt 
+8. **Quy tắc bổ sung cho AI Agent khi Refactor & Triển khai**:
+   - Không xóa code prototype nếu chưa có migration plan.
+   - Không refactor nhiều layer trong một commit.
+   - Viết test characterization trước khi di chuyển logic cũ.
+   - Không thay đổi event schema âm thầm.
+   - Không thay đổi stable ID algorithm mà không có ADR.
+   - Không xóa Spark checkpoint để làm test pass.
+   - Không dùng random UUID cho persistent identity.
+   - Không dùng Spark cho nhánh Neo4j (Neo4j nạp trực tiếp qua Kafka Connect Sink).
+   - Không ghi metadata trực tiếp từ parser vào MongoDB.
+   - Không ghi node/edge trực tiếp từ parser vào Neo4j.
+   - Không sử dụng smoke results làm final results.
+   - Mọi thay đổi kiến trúc bắt buộc phải cập nhật tài liệu docs và ADR.
 
 ## Ngăn xếp công nghệ cố định (không đề xuất thay thế)
 

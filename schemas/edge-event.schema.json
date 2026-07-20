@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Hutaph/lab04-cpg-streaming/main/schemas/edge-event.schema.json",
+  "title": "EdgeEventSchema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "event_time",
+    "repository_id",
+    "commit_sha",
+    "file_id",
+    "file_path",
+    "content_hash",
+    "parser_version",
+    "edge_id",
+    "source_id",
+    "target_id",
+    "edge_type"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "event_id": { "type": "string" },
+    "event_type": { "const": "cpg_edge" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "repository_id": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "file_id": { "type": "string" },
+    "file_path": { "type": "string" },
+    "content_hash": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "edge_id": { "type": "string" },
+    "source_id": { "type": "string" },
+    "target_id": { "type": "string" },
+    "edge_type": { "type": "string" },
+    "properties": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

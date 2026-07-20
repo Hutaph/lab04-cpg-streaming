@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Hutaph/lab04-cpg-streaming/main/schemas/node-event.schema.json",
+  "title": "NodeEventSchema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "event_time",
+    "repository_id",
+    "commit_sha",
+    "file_id",
+    "file_path",
+    "content_hash",
+    "parser_version",
+    "node_id",
+    "node_type"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "event_id": { "type": "string" },
+    "event_type": { "const": "cpg_node" },
+    "event_time": { "type": "string", "format": "date-time" },
+    "repository_id": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "file_id": { "type": "string" },
+    "file_path": { "type": "string" },
+    "content_hash": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "node_id": { "type": "string" },
+    "node_type": { "type": "string" },
+    "name": { "type": ["string", "null"] },
+    "qualified_name": { "type": ["string", "null"] },
+    "ast_path": { "type": "string" },
+    "line_start": { "type": ["integer", "null"] },
+    "column_start": { "type": ["integer", "null"] },
+    "line_end": { "type": ["integer", "null"] },
+    "column_end": { "type": ["integer", "null"] },
+    "properties": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

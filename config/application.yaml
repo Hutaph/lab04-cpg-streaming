@@ -1,0 +1,42 @@
+# Configuration settings for CPG Streaming Application
+
+application:
+  name: "cpg-streaming-service"
+  environment: "development"
+  log_level: "INFO"
+
+source_repository:
+  # The target repository clone URL and location
+  url: "https://github.com/huggingface/transformers-pr-agent.git"
+  # Path inside workspace
+  path: "workspace/source/transformers-pr-agent"
+  commit: "458c957fa1e8851825cd799f5d030876f0644194"
+
+parser:
+  version: "1.0.0"
+  schema_version: 1
+  # AST parser type: python.ast
+  type: "python.ast"
+
+kafka:
+  bootstrap_servers: "localhost:9092"
+  # TODO: Configure SSL parameters if needed in production phase
+
+neo4j:
+  # Graph Database connection details
+  uri: "bolt://localhost:7687"
+  # TODO: Add authentication credentials securely in Phase 8
+  username: "neo4j"
+  password: "TODO_SECURE_PASSWORD"
+
+mongodb:
+  # Document Database connection details
+  uri: "mongodb://localhost:27017"
+  database: "cpg_metadata"
+  collection: "file_statistics"
+
+spark:
+  # Structured Streaming configs
+  master: "local[*]"
+  checkpoint_dir: "workspace/checkpoints/spark"
+  # TODO: Add cluster parameters if scaling in Phase 9

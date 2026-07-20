@@ -1,15 +1,44 @@
+# Python dependencies and environments
 __pycache__/
+*.pyc
+.venv/
+venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
-_build/
+# Jupyter Book builds and caches
+.ipynb_checkpoints/
 lab04-book/_build/
+_build/
 lab04-book/anaconda_projects/
+
+# Environment configurations and outputs
+.env
 outputs/
 transformers-pr-agent/
 
-*.pyc
-.env
-.venv/
-venv/
+# Workspace directories (ignore content but keep gitkeeps)
+workspace/source/*
+!workspace/source/.gitkeep
+workspace/state/*
+!workspace/state/.gitkeep
+workspace/checkpoints/*
+!workspace/checkpoints/.gitkeep
+workspace/logs/*
+!workspace/logs/.gitkeep
+workspace/tmp/*
+!workspace/tmp/.gitkeep
+
+# Local database and volume directories
+infra/neo4j/data/
+infra/neo4j/logs/
+infra/mongodb/data/
+infra/kafka/data/
+*.db
+*.sqlite
+
+# Spark logs and transient directories
+spark-warehouse/
+metastore_db/
+derby.log
