@@ -1,0 +1,35 @@
+version: 1
+project:
+  id: 38b11472-8a1b-4096-9b5f-0528ded8e6b5
+  title: "Lab 04: Spark Streaming"
+  subtitle: "Code Property Graph Streaming Pipeline"
+  short_title: "Lab 04"
+  description: "Báo cáo thực hành xây dựng Code Property Graph tăng dần với Kafka, Neo4j, MongoDB và Spark Structured Streaming."
+  keywords:
+    - big data
+    - spark streaming
+    - kafka
+    - neo4j
+    - mongodb
+    - code property graph
+    - python ast
+  authors:
+    - name: "Nhóm 11"
+      affiliation: "Trường Đại học Khoa học Tự nhiên, ĐHQG-HCM"
+  subject: "Nhập môn Dữ liệu lớn"
+  venue:
+    title: "Lab 04"
+  numbering:
+    headings: true
+  toc:
+    - file: index.md
+    - file: task1_clone_explore.ipynb
+    - file: task2_parser_service.ipynb
+site:
+  template: book-theme
+  options:
+    logo_text: "Lab 04"
+    folders: true
+    hide_outline: false
+    hide_toc: false
+    hide_footer_links: false

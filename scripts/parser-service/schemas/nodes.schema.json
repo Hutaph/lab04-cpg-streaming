@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CPG Node Event",
+  "type": "object",
+  "required": ["schema_version", "event_type", "timestamp", "id", "label", "repo", "commit_hash", "file_path", "file_hash"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "event_type": { "const": "cpg_node" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "id": { "type": "string" },
+    "label": { "type": "string" },
+    "repo": { "type": "string" },
+    "commit_hash": { "type": "string" },
+    "file_path": { "type": "string" },
+    "file_hash": { "type": "string" },
+    "ast_path": { "type": "string" },
+    "name": { "type": "string" },
+    "line": { "type": ["integer", "null"] },
+    "column": { "type": ["integer", "null"] },
+    "end_line": { "type": ["integer", "null"] },
+    "end_column": { "type": ["integer", "null"] }
+  },
+  "additionalProperties": true
+}

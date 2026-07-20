@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+_build/
+lab04-book/_build/
+lab04-book/anaconda_projects/
+outputs/
+transformers-pr-agent/
+
+*.pyc
+.env
+.venv/
+venv/

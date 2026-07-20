@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CPG Edge Event",
+  "type": "object",
+  "required": ["schema_version", "event_type", "timestamp", "id", "source", "target", "edge_type", "repo", "commit_hash", "file_path", "file_hash"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "event_type": { "const": "cpg_edge" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "id": { "type": "string" },
+    "source": { "type": "string" },
+    "target": { "type": "string" },
+    "edge_type": { "enum": ["AST_CHILD", "CFG_NEXT", "DFG_REACHES", "CALLS"] },
+    "repo": { "type": "string" },
+    "commit_hash": { "type": "string" },
+    "file_path": { "type": "string" },
+    "file_hash": { "type": "string" }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Parser Error Event",
+  "type": "object",
+  "required": ["schema_version", "event_type", "timestamp", "id", "repo", "commit_hash", "file_path", "file_hash", "error_type", "message"],
+  "properties": {
+    "schema_version": { "type": "integer" },
+    "event_type": { "const": "parser_error" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "id": { "type": "string" },
+    "repo": { "type": "string" },
+    "commit_hash": { "type": "string" },
+    "file_path": { "type": "string" },
+    "file_hash": { "type": "string" },
+    "error_type": { "type": "string" },
+    "message": { "type": "string" },
+    "line": { "type": ["integer", "null"] },
+    "column": { "type": ["integer", "null"] }
+  },
+  "additionalProperties": true
+}
