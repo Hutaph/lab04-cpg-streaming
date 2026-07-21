@@ -15,13 +15,20 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 ### 2. Danh sách các Chương báo cáo (Chapters)
 - **[Task 1: Clone và khám phá repository](task1_clone_explore.ipynb)**: Thực hiện shallow clone, xác định git commit hash và khảo sát cấu trúc thư mục, thống kê danh sách file Python nguồn.
 - **[Task 2: Parser Service CPG](task2_parser_service.ipynb)**: Triển khai CPG Parser phân tích cú pháp AST, CFG, DFG, Call graph, sinh stable ID ổn định và chạy thử nghiệm dry-run xuất file JSONL.
+- **[Task 5: Spark và MongoDB](task5_spark_mongodb.ipynb)**: Chạy Spark Structured Streaming đọc metadata từ Kafka, ghi MongoDB, kiểm tra checkpoint resume và upsert khi replay.
 
 ---
 
 ### 3. Trạng thái Dự án hiện tại
 - **Task 1 (Clone & Discovery)**: Hoàn thành (Verified).
 - **Task 2 (Parser Service)**: Hoàn thành (Verified locally).
-- **Task 3, 4, 5 & 6 (Kafka/Neo4j/Spark/MongoDB/Replay)**: Chưa thực hiện (Scaffolded).
+- **Task 3, 4 & 6 (Kafka/Neo4j/Replay)**: Chưa thực hiện (Scaffolded).
+- **Task 5 (Spark/MongoDB)**: Đã triển khai và xác minh end-to-end bằng Docker.
+
+Để tái hiện kiểm thử Task 5, chạy các lệnh trong [infra/README.md](../infra/README.md)
+để khởi động Kafka, Zookeeper, MongoDB và tạo topic `source.metadata`, sau đó
+chạy [Spark ingestion job](../spark_jobs/README.md) với tùy chọn `-AvailableNow`.
+Không đưa `.env` hoặc password thật vào notebook và báo cáo công khai.
 
 ---
 
