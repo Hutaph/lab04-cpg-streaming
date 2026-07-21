@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Hutaph/lab04-cpg-streaming/main/schemas/edge-event.schema.json",
+  "title": "EdgeEventSchema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "event_time",
+    "repository_id",
+    "commit_sha",
+    "file_id",
+    "file_path",
+    "content_hash",
+    "parser_version",
+    "edge"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "event_id": { "type": "string" },
+    "event_type": { "type": "string", "enum": ["EDGE_UPSERT", "EDGE_DELETE"] },
+    "event_time": { "type": "string" },
+    "repository_id": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "file_id": { "type": "string" },
+    "file_path": { "type": "string" },
+    "content_hash": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "edge": { "type": "object" }
+  },
+  "if": {
+    "properties": {
+      "event_type": { "const": "EDGE_UPSERT" }
+    }
+  },
+  "then": {
+    "properties": {
+      "edge": {
+        "type": "object",
+        "required": [
+          "edge_id",
+          "source_id",
+          "target_id",
+          "edge_type"
+        ],
+        "properties": {
+          "edge_id": { "type": "string" },
+          "source_id": { "type": "string" },
+          "target_id": { "type": "string" },
+          "edge_type": { "type": "string" },
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "edge": {
+        "type": "object",
+        "required": [
+          "edge_id"
+        ],
+        "properties": {
+          "edge_id": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

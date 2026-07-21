@@ -1,0 +1,150 @@
+# Kế hoạch Triển khai, Kiểm thử và Ma trận Truy vết Yêu cầu
+
+Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lược đảm bảo chất lượng phần mềm, và ma trận đối chiếu yêu cầu thực tế của dự án.
+
+---
+
+## 1. Lộ trình Triển khai chi tiết (15 Phases)
+
+### Phase 0 — Architecture and scaffold
+- **Mục tiêu**: Xây dựng cấu trúc thư mục chuẩn hóa, cấu hình YAML tĩnh, JSON Schemas ban đầu và tài liệu kiến trúc kỹ thuật.
+- **Output**: Cấu trúc project scaffold hoàn chỉnh, các file code Python placeholder compile được.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 1 — Repository cloning and discovery
+- **Mục tiêu**: Shallow clone repository mục tiêu và liệt kê các file Python hợp lệ cần phân tích, loại trừ các mẫu exclude.
+- **Output**: Thư mục `workspace/source/transformers-pr-agent` được clone thành công và danh sách file Python in ra CLI.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 2 — AST parser and deterministic IDs
+- **Mục tiêu**: Triển khai AST Builder phân tích cú pháp tạo CPG Node, quan hệ `AST_CHILD` và sinh deterministic ID.
+- **Output**: Danh sách các node và quan hệ phân cấp AST kèm theo ID dạng sha256 ổn định.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 3 — CFG builder
+- **Mục tiêu**: Triển khai logic tạo cạnh luồng điều khiển `CFG_NEXT` cấp câu lệnh.
+- **Output**: Danh sách các cạnh `CFG_NEXT` kết nối các câu lệnh kề nhau.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 4 — DFG builder
+- **Mục tiêu**: Xây dựng cạnh truyền dữ liệu `DFG_REACHES` giữa điểm định nghĩa biến và điểm sử dụng biến.
+- **Output**: Cạnh DFG chỉ rõ biến nào truyền tới vị trí nào.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 5 — Call graph builder
+- **Mục tiêu**: Tạo nút `CallTarget` ổn định và cạnh `CALLS` nối từ AST Call site tới CallTarget.
+- **Output**: Mạng lưới liên kết cuộc gọi hàm.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 6 — Local JSONL events and schema validation
+- **Mục tiêu**: Hỗ trợ ghi kết quả parse cục bộ ra file JSON Lines khi chạy ở chế độ dry-run và validate schema.
+- **Output**: Các file `nodes.jsonl`, `edges.jsonl`, `metadata.jsonl`, `errors.jsonl` hợp lệ về cấu trúc JSON Schema.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+
+### Phase 7 — Kafka producer and topic creation
+- **Mục tiêu**: Thiết lập Kafka Broker ở local và viết Adapter đẩy event trực tiếp từ Parser Service vào Kafka.
+- **Output**: Sự kiện được gửi thành công vào các topic Kafka tương ứng.
+- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+
+### Phase 8 — Neo4j Kafka Sink
+- **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
+- **Output**: Đồ thị Neo4j được cập nhật tự động dựa trên Cypher MERGE query.
+- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+
+### Phase 9 — Spark Structured Streaming
+- **Mục tiêu**: Viết ứng dụng Spark Structured Streaming đọc metadata event từ Kafka.
+- **Output**: Dataframe streaming trong Spark nhận đủ dữ liệu.
+- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+
+### Phase 10 — MongoDB Spark Ingestion
+- **Mục tiêu**: Cấu hình Spark Structured Streaming ghi trực tiếp dữ liệu metadata vào MongoDB.
+- **Output**: Tài liệu metadata thống kê được cập nhật liên tục vào MongoDB.
+- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+
+### Phase 11 — SQLite State Store and incremental parses
+- **Mục tiêu**: Tích hợp SQLite State Store ghi nhận lịch sử parse để hỗ trợ quét so khớp tăng dần.
+- **Output**: SQLite db ghi lưu hash của các file, CLI bỏ qua các file không đổi nội dung.
+- **Trạng thái**: **Hoàn thành (Verified locally)**.
+
+### Phase 12 — File replay and graph diffs
+- **Mục tiêu**: Hiện thực hóa việc diff đồ thị CPG cũ/mới của một file khi file đó bị chỉnh sửa nội dung, phát hành Delete events tương ứng.
+- **Output**: Logic CpgDiffer tính toán chính xác số node/edge bị thay đổi, gửi Delete events tương ứng để dọn dẹp Neo4j.
+- **Trạng thái**: **Hoàn thành (Verified locally)**.
+
+### Phase 13 — Overall replay validation
+- **Mục tiêu**: Tích hợp toàn trình kiểm tra replay trên cả Neo4j và MongoDB để chứng minh tính idempotent.
+- **Output**: Không phát sinh bản ghi trùng lặp trên database sau nhiều lần chạy lại.
+- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+
+### Phase 14 — Official Jupyter Book and reflections
+- **Mục tiêu**: Biên dịch toàn bộ tài liệu báo cáo thực hành và publish công khai qua GitHub Pages.
+- **Output**: Jupyter Book chứa đầy đủ bằng chứng thực thi các Task và Reflection.
+- **Trạng thái**: **Đang triển khai (In Progress)**.
+
+---
+
+## 2. Chiến lược Kiểm thử (Testing Strategy)
+
+Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và đảm bảo chất lượng tĩnh:
+
+### 2.1. Đảm bảo chất lượng mã nguồn tĩnh (Static Analysis)
+- **Kiểm tra biên dịch**: Chạy biên dịch toàn bộ tệp tin Python trong dự án:
+  ```bash
+  uv run python -m compileall -q src scripts spark_jobs
+  ```
+- **Linter & Formatter**: Sử dụng Ruff để duy trì chất lượng code:
+  ```bash
+  uv run ruff check src tests scripts spark_jobs
+  uv run ruff format --check src tests scripts spark_jobs
+  ```
+- **Type Checking**: Sử dụng strict Mypy để kiểm tra kiểu dữ liệu:
+  ```bash
+  MYPYPATH=src uv run mypy --explicit-package-bases src
+  ```
+
+### 2.2. Unit Tests
+- Được tổ chức trong thư mục `tests/unit/`, chạy độc lập không phụ thuộc môi trường mạng hay database bên ngoài.
+- **Lệnh chạy**:
+  ```bash
+  PYTHONPATH=src uv run pytest tests/unit -q
+  ```
+- **Mục tiêu**: Kiểm thử logic của AST/CFG/DFG/Call builders, thuật toán sinh Stable ID, logic diff đồ thị `CpgDiffer`, và SQLite state store adapter.
+
+---
+
+## 3. Ma trận Truy vết Yêu cầu (Traceability Matrix)
+
+| Yêu cầu đề bài | Thiết kế đáp ứng | Module/File | Bằng chứng cần có | Trạng thái |
+| :--- | :--- | :--- | :--- | :--- |
+| **Shallow clone** | Clone repository mẫu bằng git parameter `--depth 1` | `scripts/clone_source_repo.sh` | Output lệnh git clone và thư mục clone | **Verified** |
+| **Đếm file Python** | Tìm kiếm và đếm số lượng file `.py` không nằm trong danh sách exclude | [discover_repository.py](../src/application/services/discover_repository.py) | Số lượng file Python in ra log hoặc màn hình CLI | **Verified** |
+| **Incremental parser** | So sánh hash nội dung để chỉ parse những file bị thay đổi | [sqlite_state_store.py](../src/infrastructure/state/sqlite_state_store.py) | Log chạy parser lần 2 chỉ ra số lượng file xử lý là 0 | **Verified locally** |
+| **AST** | Trích xuất cây cú pháp trừu tượng AST của Python | [ast_builder.py](../src/parsing/ast_builder.py) | Cạnh AST_CHILD kết nối các nút phân cấp trong Neo4j | **Verified locally** |
+| **CFG** | Trích xuất luồng điều khiển nhảy giữa các câu lệnh | [cfg_builder.py](../src/parsing/cfg_builder.py) | Cạnh CFG_NEXT kết nối các câu lệnh kề nhau trong Neo4j | **Verified locally** |
+| **DFG** | Phân tích quan hệ lan truyền dữ liệu biến | [dfg_builder.py](../src/parsing/dfg_builder.py) | Cạnh DFG_REACHES giữa định nghĩa biến và điểm sử dụng | **Verified locally** |
+| **Call edges** | Trích xuất cuộc gọi hàm kết nối tới CallTarget | [call_builder.py](../src/parsing/call_builder.py) | Nút CallTarget và cạnh CALLS nối từ nút gọi hàm | **Verified locally** |
+| **Bounded memory** | Parse tuần tự từng file, giải phóng bộ nhớ ngay sau đó | [process_file.py](../src/application/services/process_file.py) | Log giám sát dung lượng RAM tiêu thụ cố định khi chạy | **Verified locally** |
+| **Stable IDs** | Hàm hash sha256 sinh ID ổn định từ thuộc tính cố định | [identifiers.py](../src/parsing/identifiers.py) | Unit test chứng minh ID không đổi qua các lần chạy | **Verified locally** |
+| **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Scaffolded** |
+| **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Scaffolded** |
+| **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Scaffolded** |
+| **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Scaffolded** |
+| **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Scaffolded** |
+| **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py` | Log Spark hiển thị luồng dữ liệu liên tục | **Scaffolded** |
+| **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py` | Document lưu trữ trong MongoDB collection | **Scaffolded** |
+| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `config/application.yaml` | Thư mục checkpoint chứa các file offset Spark | **Scaffolded** |
+| **Modified-file replay**| Thay đổi nội dung file, parser re-run và cập nhật | [replay_file.py](../src/application/services/replay_file.py) | Log chạy replay hiển thị số lượng event cập nhật | **Partially Implemented (SQLite)** |
+| **No duplication** | Replay không làm trùng lặp phần tử trên các databases | [replay_file.py](../src/application/services/replay_file.py) | Kiểm tra số lượng bản ghi DB bằng verify script | **Partially Implemented (SQLite)** |
+| **Architecture diagram**| Vẽ sơ đồ kiến trúc hệ thống chi tiết | [system_architecture.md](system_architecture.md) | Mermaid diagram tích hợp trong tài liệu | **Designed, evidence pending** |
+| **Jupyter Book** | Biên dịch toàn bộ tài liệu báo cáo dạng sách | `lab04-book/myst.yml` | Thư mục `lab04-book/_build/html` được tạo | **Verified** |
+| **GitHub Pages** | Host Jupyter Book công khai | `.github/workflows/deploy.yml` | URL public hoạt động bình thường | **Verified** |
+| **Executed cells** | Chạy notebook lưu lại kết quả hiển thị | `lab04-book/*.ipynb` | Kết quả hiển thị in ra dưới mỗi cell | **Verified** |
+| **Screenshots** | Đính kèm hình ảnh database UI vào báo cáo | `lab04-book/` | Hình ảnh hiển thị trên trang báo cáo HTML | **Not started / Pending** |
+| **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/*.ipynb` | Mục Reflection hiển thị ở cuối mỗi notebook | **Verified** |
+| **Meaningful commits** | Commit phản ánh tiến độ chi tiết của nhóm | Git history | Lịch sử commit chứa mã [Task N] tăng dần | **Verified** |
+
+---
+
+## 4. Hướng dẫn Nộp bài (Moodle Submission Rules)
+- Bài thực hành được nộp chính thức dưới dạng **root URL của published Jupyter Book** (GitHub Pages).
+- Moodle **chỉ nhận đúng 1 text entry** chứa URL này. Không chấp nhận nộp file nén ZIP, tệp tài liệu PDF hoặc Word.

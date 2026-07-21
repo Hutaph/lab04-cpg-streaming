@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Hutaph/lab04-cpg-streaming/main/schemas/error-event.schema.json",
+  "title": "ErrorEventSchema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "event_time",
+    "repository_id",
+    "commit_sha",
+    "file_id",
+    "file_path",
+    "content_hash",
+    "parser_version",
+    "error"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "event_id": { "type": "string" },
+    "event_type": { "const": "PARSER_ERROR" },
+    "event_time": { "type": "string" },
+    "repository_id": { "type": "string" },
+    "commit_sha": { "type": "string" },
+    "file_id": { "type": "string" },
+    "file_path": { "type": "string" },
+    "content_hash": { "type": "string" },
+    "parser_version": { "type": "string" },
+    "error": {
+      "type": "object",
+      "required": [
+        "error_type",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "error_type": { "type": "string" },
+        "message": { "type": "string" },
+        "line": { "type": ["integer", "null"] },
+        "column": { "type": ["integer", "null"] },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

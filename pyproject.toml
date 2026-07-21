@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lab04-cpg-streaming"
+version = "1.0.0"
+description = "Incremental Code Property Graph Streaming Pipeline scaffold"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "PyYAML>=6.0.0",
+    "typer>=0.9.0",
+    "jsonschema>=4.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0"
+]
+
+[project.scripts]
+lab04 = "cli.main:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["domain*", "application*", "parsing*", "infrastructure*", "cli*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["tests/fixtures/broken_syntax.py"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true

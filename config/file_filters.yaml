@@ -1,0 +1,23 @@
+# Configuration filters for repository discovery phase
+
+smoke:
+  # Dry-run development filters (small scope)
+  max_files: 5
+  include:
+    - "src/**/*.py"
+  exclude:
+    - "**/tests/**"
+    - "**/__pycache__/**"
+    - "**/build/**"
+
+final:
+  # Complete parsing scope for the final evaluation
+  include:
+    - "**/*.py"
+  exclude:
+    - "**/__pycache__/**"
+    - "**/build/**"
+    - "**/generated/**"
+    - "**/vendor/**"
+    - "**/.venv/**"
+    # Tests are explicitly kept unless requested otherwise

@@ -28,8 +28,6 @@ project:
 site:
   template: book-theme
   options:
-    logo_text: "Lab 04"
-    folders: true
-    hide_outline: false
-    hide_toc: false
-    hide_footer_links: false
+    logo: assets/logo.png
+    favicon: assets/logo.png
+    logo_alt: "Lab 04 CPG Streaming"
