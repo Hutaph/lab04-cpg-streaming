@@ -21,7 +21,8 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 ### 3. Trạng thái Dự án hiện tại
 - **Task 1 (Clone & Discovery)**: Hoàn thành (Verified).
 - **Task 2 (Parser Service)**: Hoàn thành (Verified locally).
-- **Task 3, 4, 5 & 6 (Kafka/Neo4j/Spark/MongoDB/Replay)**: Chưa thực hiện (Scaffolded).
+- **Task 3, 4 & 6 (Kafka/Neo4j/Replay)**: Chưa thực hiện (Scaffolded).
+- **Task 5 (Spark/MongoDB)**: Đã triển khai và xác minh end-to-end bằng Docker; có thể bổ sung ảnh/log vào chương báo cáo khi chạy chính thức.
 
 ---
 

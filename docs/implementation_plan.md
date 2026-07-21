@@ -54,12 +54,12 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 ### Phase 9 — Spark Structured Streaming
 - **Mục tiêu**: Viết ứng dụng Spark Structured Streaming đọc metadata event từ Kafka.
 - **Output**: Dataframe streaming trong Spark nhận đủ dữ liệu.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Đã triển khai (Docker E2E verified)**.
 
 ### Phase 10 — MongoDB Spark Ingestion
 - **Mục tiêu**: Cấu hình Spark Structured Streaming ghi trực tiếp dữ liệu metadata vào MongoDB.
 - **Output**: Tài liệu metadata thống kê được cập nhật liên tục vào MongoDB.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Đã triển khai (Docker E2E verified)**.
 
 ### Phase 11 — SQLite State Store and incremental parses
 - **Mục tiêu**: Tích hợp SQLite State Store ghi nhận lịch sử parse để hỗ trợ quét so khớp tăng dần.
@@ -130,9 +130,9 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Scaffolded** |
 | **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Scaffolded** |
 | **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Scaffolded** |
-| **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py` | Log Spark hiển thị luồng dữ liệu liên tục | **Scaffolded** |
-| **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py` | Document lưu trữ trong MongoDB collection | **Scaffolded** |
-| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `config/application.yaml` | Thư mục checkpoint chứa các file offset Spark | **Scaffolded** |
+| **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py` | Dataframe streaming lọc `FILE_METADATA_UPSERT` từ topic `source.metadata` | **Implemented, Docker E2E verified** |
+| **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py` | Writer MongoDB dùng `replace`/`upsertDocument` theo `file_id` | **Implemented, Docker E2E verified** |
+| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `spark_jobs/metadata_to_mongodb.py`, `config/application.yaml` | `checkpointLocation` trỏ tới `workspace/checkpoints/spark` | **Implemented, Docker E2E verified** |
 | **Modified-file replay**| Thay đổi nội dung file, parser re-run và cập nhật | [replay_file.py](../src/application/services/replay_file.py) | Log chạy replay hiển thị số lượng event cập nhật | **Partially Implemented (SQLite)** |
 | **No duplication** | Replay không làm trùng lặp phần tử trên các databases | [replay_file.py](../src/application/services/replay_file.py) | Kiểm tra số lượng bản ghi DB bằng verify script | **Partially Implemented (SQLite)** |
 | **Architecture diagram**| Vẽ sơ đồ kiến trúc hệ thống chi tiết | [system_architecture.md](system_architecture.md) | Mermaid diagram tích hợp trong tài liệu | **Designed, evidence pending** |
