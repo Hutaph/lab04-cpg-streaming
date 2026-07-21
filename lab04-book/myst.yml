@@ -25,6 +25,7 @@ project:
     - file: index.md
     - file: task1_clone_explore.ipynb
     - file: task2_parser_service.ipynb
+    - file: task3_kafka_topics.ipynb
 site:
   template: book-theme
   options:

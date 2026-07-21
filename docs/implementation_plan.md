@@ -44,7 +44,7 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 ### Phase 7 — Kafka producer and topic creation
 - **Mục tiêu**: Thiết lập Kafka Broker ở local và viết Adapter đẩy event trực tiếp từ Parser Service vào Kafka.
 - **Output**: Sự kiện được gửi thành công vào các topic Kafka tương ứng.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Hoàn thành (Verified)**.
 
 ### Phase 8 — Neo4j Kafka Sink
 - **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
