@@ -140,7 +140,7 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **GitHub Pages** | Host Jupyter Book công khai | `.github/workflows/deploy.yml` | URL public hoạt động bình thường | **Verified** |
 | **Executed cells** | Chạy notebook lưu lại kết quả hiển thị | `lab04-book/*.ipynb` | Kết quả hiển thị in ra dưới mỗi cell | **Verified** |
 | **Screenshots** | Đính kèm hình ảnh database UI vào báo cáo | `lab04-book/` | Hình ảnh hiển thị trên trang báo cáo HTML | **Not started / Pending** |
-| **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/reflection.md` | Mục Reflection hiển thị ở cuối Jupyter Book | **Partially Implemented** |
+| **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/*.ipynb` | Mục Reflection hiển thị ở cuối mỗi notebook | **Verified** |
 | **Meaningful commits** | Commit phản ánh tiến độ chi tiết của nhóm | Git history | Lịch sử commit chứa mã [Task N] tăng dần | **Verified** |
 
 ---
