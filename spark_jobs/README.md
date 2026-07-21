@@ -29,6 +29,15 @@ Các tham số kết nối có thể truyền qua biến môi trường hoặc C
 powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1
 ```
 
+Để xử lý các event hiện đang có trong Kafka rồi dừng job:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1 -AvailableNow
+```
+
+Script tự nạp `KAFKA_BOOTSTRAP_SERVERS`, `MONGODB_URI`,
+`MONGODB_DATABASE`, `MONGODB_COLLECTION` và `SPARK_CHECKPOINT_PATH` từ `.env`.
+
 Hoặc truyền trực tiếp các biến môi trường:
 
 ```bash

@@ -22,7 +22,12 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 - **Task 1 (Clone & Discovery)**: Hoàn thành (Verified).
 - **Task 2 (Parser Service)**: Hoàn thành (Verified locally).
 - **Task 3, 4 & 6 (Kafka/Neo4j/Replay)**: Chưa thực hiện (Scaffolded).
-- **Task 5 (Spark/MongoDB)**: Đã triển khai và xác minh end-to-end bằng Docker; có thể bổ sung ảnh/log vào chương báo cáo khi chạy chính thức.
+- **Task 5 (Spark/MongoDB)**: Đã triển khai và xác minh end-to-end bằng Docker.
+
+Để tái hiện kiểm thử Task 5, chạy các lệnh trong [infra/README.md](../infra/README.md)
+để khởi động Kafka, Zookeeper, MongoDB và tạo topic `source.metadata`, sau đó
+chạy [Spark ingestion job](../spark_jobs/README.md) với tùy chọn `-AvailableNow`.
+Không đưa `.env` hoặc password thật vào notebook và báo cáo công khai.
 
 ---
 

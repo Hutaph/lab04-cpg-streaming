@@ -4,14 +4,15 @@ Thư mục này chi tiết các hướng dẫn cài đặt dockerized cho các t
 
 ## Khởi chạy hạ tầng
 
-Tạo file môi trường local và điền các password:
+Tạo file môi trường local và điền các password nếu file chưa tồn tại:
 
 ```powershell
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
 Tối thiểu cần điền `MONGO_ROOT_PASSWORD` và `NEO4J_PASSWORD`. URI
 `MONGODB_URI` phải dùng cùng password MongoDB và thêm `authSource=admin`.
+File `.env` đã được thêm vào `.gitignore`; không commit file này.
 
 Khởi động các service cần cho Task 5:
 
@@ -34,3 +35,9 @@ docker exec cpg-kafka kafka-topics --bootstrap-server kafka:29092 --create --if-
 Script `infra/kafka/create-topics.sh` tạo toàn bộ topics nếu máy host đã có Kafka CLI.
 Trong container Kafka, dùng bootstrap server `kafka:29092`; từ máy host, dùng
 `localhost:9092`.
+
+## Dừng hạ tầng
+
+```powershell
+docker compose --env-file .env -f infra/docker-compose.yml down
+```
