@@ -986,3 +986,259 @@ def test_successful_forced_refresh_updates_processing_versions() -> None:
     state.commit.assert_called_once_with(
         expected_file_id, "foo.py", content_hash, ["new_node_1"], [], PARSER_VERSION, SCHEMA_VERSION
     )
+
+
+# --- Legacy Schema, Logical Ordering, and Forced Refresh Metadata Tests ---
+
+
+def test_legacy_null_schema_version_forces_full_snapshot_refresh() -> None:
+    """Verify that a legacy row in SQLite state (schema_version = None) is not skipped and triggers a full snapshot refresh."""
+    from pathlib import Path
+    from domain.models import CodeNode, CodeEdge
+    import hashlib
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    # Previous state has schema_version = None
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["node_1"], ["edge_1"], PARSER_VERSION, None)
+
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+    edge1 = CodeEdge("edge_1", expected_file_id, "node_1", "node_1", "AST_CHILD")
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[edge1],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    published = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+
+    # Must reprocess and publish upserts for all nodes and edges
+    node_upserts = [e for e in published if e["event_type"] == "NODE_UPSERT"]
+    edge_upserts = [e for e in published if e["event_type"] == "EDGE_UPSERT"]
+    meta_upserts = [e for e in published if e["event_type"] == "FILE_METADATA_UPSERT"]
+
+    assert len(node_upserts) == 1
+    assert len(edge_upserts) == 1
+    assert len(meta_upserts) == 1
+
+    # SQLite state must be updated to current versions after success
+    state.commit.assert_called_once_with(
+        expected_file_id, "foo.py", content_hash, ["node_1"], ["edge_1"], PARSER_VERSION, SCHEMA_VERSION
+    )
+
+
+def test_failed_legacy_schema_refresh_preserves_previous_state() -> None:
+    """Verify that if publishing fails during refresh of a legacy row (schema_version = None), the old state is untouched."""
+    from pathlib import Path
+    from domain.models import CodeNode
+    import hashlib
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    # Previous state has schema_version = None
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["node_1"], [], PARSER_VERSION, None)
+
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    writer.flush.side_effect = PublishError("Kafka broker failed")
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    with pytest.raises(PublishError):
+        service.execute(sf)
+
+    # State store commit must NOT have been called, preserving previous null state
+    state.commit.assert_not_called()
+
+
+def test_forced_refresh_preserves_logical_event_order() -> None:
+    """Verify forced refresh publishes events in EDGE_DELETE -> NODE_DELETE -> NODE_UPSERT -> EDGE_UPSERT -> METADATA sequence."""
+    from pathlib import Path
+    from domain.models import CodeNode, CodeEdge
+    import hashlib
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    # Previous state has old_node_1 and old_edge_1 under old version
+    state = Mock()
+    state.get.return_value = FileState(
+        expected_file_id,
+        content_hash,
+        ["old_node_1"],
+        ["old_edge_1"],
+        "0.9.0",
+        SCHEMA_VERSION,
+    )
+
+    # Current graph has new_node_1 and new_edge_1
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("new_node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+    edge1 = CodeEdge("new_edge_1", expected_file_id, "new_node_1", "new_node_1", "AST_CHILD")
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[edge1],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    published_types = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published_types.append(evt["event_type"])
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+
+    # We expect the strict ordering: EDGE_DELETE, NODE_DELETE, NODE_UPSERT, EDGE_UPSERT, FILE_METADATA_UPSERT
+    expected_sequence = ["EDGE_DELETE", "NODE_DELETE", "NODE_UPSERT", "EDGE_UPSERT", "FILE_METADATA_UPSERT"]
+    assert published_types == expected_sequence
+
+
+@pytest.mark.parametrize(
+    "prev_parser,prev_schema",
+    [
+        ("0.9.0", SCHEMA_VERSION),
+        (PARSER_VERSION, "0.9"),
+        (None, SCHEMA_VERSION),
+        (PARSER_VERSION, None),
+    ],
+)
+def test_forced_refresh_emits_exactly_one_metadata_event(prev_parser, prev_schema) -> None:
+    """Verify forced refresh emits exactly one metadata event, positioned last."""
+    from pathlib import Path
+    from domain.models import CodeNode
+    import hashlib
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["n1"], [], prev_parser, prev_schema)
+
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("n1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    published = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+
+    meta_events = [e for e in published if e["event_type"] == "FILE_METADATA_UPSERT"]
+    assert len(meta_events) == 1
+    assert published[-1]["event_type"] == "FILE_METADATA_UPSERT"
+
+    # Verify payload content matches constants
+    meta_payload = meta_events[0]
+    assert meta_payload["content_hash"] == content_hash
+    assert meta_payload["parser_version"] == PARSER_VERSION
+    assert meta_payload["schema_version"] == SCHEMA_VERSION
+    assert meta_payload["repository_id"] == "test_repo"
+    assert meta_payload["file_id"] == expected_file_id

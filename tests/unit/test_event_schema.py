@@ -204,3 +204,29 @@ def test_unknown_event_type_raises_exception():
     validator = EventValidator(schemas_dir)
     with pytest.raises(SchemaValidationError):
         validator.validate("UNKNOWN_EVENT", {"some": "data"})
+
+
+def test_all_json_schemas_match_runtime_schema_version() -> None:
+    """Verify that all JSON Schema files define schema_version const matching SCHEMA_VERSION."""
+    import json
+    from pathlib import Path
+    from domain.constants import SCHEMA_VERSION
+
+    schemas_dir = Path("schemas")
+    if not schemas_dir.exists():
+        schemas_dir = Path("../schemas")
+
+    assert schemas_dir.exists(), f"Schemas directory not found: {schemas_dir}"
+
+    for path in schemas_dir.glob("*.schema.json"):
+        with open(path, "r", encoding="utf-8") as f:
+            schema = json.load(f)
+
+        properties = schema.get("properties", {})
+        schema_version_prop = properties.get("schema_version", {})
+
+        const_val = schema_version_prop.get("const")
+        assert const_val == SCHEMA_VERSION, (
+            f"Schema version constraint in {path.name} is '{const_val}', "
+            f"but runtime SCHEMA_VERSION is '{SCHEMA_VERSION}'"
+        )
