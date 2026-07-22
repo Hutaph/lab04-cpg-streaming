@@ -6,7 +6,7 @@ from application.services.process_file import ProcessFileService
 from domain.models import SourceFile, FileState, ParsedFileGraph, FileMetadata
 from domain.enums import ParseStatus
 from domain.errors import PublishError
-from domain.constants import PARSER_VERSION
+from domain.constants import PARSER_VERSION, SCHEMA_VERSION
 
 
 def test_unchanged_skip_flow() -> None:
@@ -15,14 +15,14 @@ def test_unchanged_skip_flow() -> None:
     repo.read_file.return_value = b"x = 1"
 
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_abc", [], [], PARSER_VERSION)
+    state.get.return_value = FileState("file_id", "hash_abc", [], [], PARSER_VERSION, SCHEMA_VERSION)
 
     # The computed hash of b"x = 1" is "a053...". We force mocking to return equal hash
     # Or we can let it calculate naturally
     import hashlib
 
     content_hash = hashlib.sha256(b"x = 1").hexdigest()
-    state.get.return_value = FileState("file_id", content_hash, [], [], PARSER_VERSION)
+    state.get.return_value = FileState("file_id", content_hash, [], [], PARSER_VERSION, SCHEMA_VERSION)
 
     parser = Mock()
     validator = Mock()
@@ -104,7 +104,9 @@ def test_process_file_publishes_events_in_logical_order() -> None:
     # Set up previous state containing nodes and edges to trigger removals
     state = Mock()
     # Existing DB has nodes and edges to be deleted
-    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"], PARSER_VERSION)
+    state.get.return_value = FileState(
+        "file_id", "old_hash", ["old_node_id"], ["old_edge_id"], PARSER_VERSION, SCHEMA_VERSION
+    )
 
     # Mock parser
     meta = FileMetadata("file_id", "test_repo", "foo.py", "new_hash", 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS)
@@ -447,7 +449,9 @@ def test_previous_state_preserved_on_publish_failure() -> None:
 
     # Previous state contains state A
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"], PARSER_VERSION)
+    state.get.return_value = FileState(
+        "file_id", "hash_version_A", ["node_A"], ["edge_A"], PARSER_VERSION, SCHEMA_VERSION
+    )
 
     # Mock parser output for version B
     meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_version_B", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
@@ -573,7 +577,7 @@ def test_parser_version_change_reprocesses_unchanged_source() -> None:
     expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
 
     state = Mock()
-    state.get.return_value = FileState(expected_file_id, content_hash, [], [], "0.9.0")
+    state.get.return_value = FileState(expected_file_id, content_hash, [], [], "0.9.0", SCHEMA_VERSION)
 
     # Mock parser to return new graph
     meta = FileMetadata(
@@ -606,7 +610,9 @@ def test_parser_version_change_reprocesses_unchanged_source() -> None:
     # Status should be SUCCESS (reprocessed), not SKIPPED_UNCHANGED
     assert res.status == ParseStatus.SUCCESS
     parser.parse_file.assert_called_once()
-    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION)
+    state.commit.assert_called_once_with(
+        expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION, SCHEMA_VERSION
+    )
 
 
 def test_legacy_null_parser_version_reprocesses() -> None:
@@ -624,7 +630,7 @@ def test_legacy_null_parser_version_reprocesses() -> None:
     expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
 
     state = Mock()
-    state.get.return_value = FileState(expected_file_id, content_hash, [], [], None)
+    state.get.return_value = FileState(expected_file_id, content_hash, [], [], None, SCHEMA_VERSION)
 
     # Mock parser
     meta = FileMetadata(
@@ -656,4 +662,327 @@ def test_legacy_null_parser_version_reprocesses() -> None:
 
     assert res.status == ParseStatus.SUCCESS
     parser.parse_file.assert_called_once()
-    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION)
+    state.commit.assert_called_once_with(
+        expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION, SCHEMA_VERSION
+    )
+
+
+# --- Event ID Contract Tests ---
+
+
+def test_event_id_is_stable_for_same_processing_contract() -> None:
+    """Verify that same inputs with same versions produce identical event ID."""
+    from parsing.identifiers import IdentifierGenerator
+
+    id1 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "1.0")
+    id2 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "1.0")
+    assert id1 == id2
+
+
+def test_event_id_changes_with_parser_version() -> None:
+    """Verify that event ID changes when parser version changes."""
+    from parsing.identifiers import IdentifierGenerator
+
+    id1 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "1.0")
+    id2 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "2.0.0", "1.0")
+    assert id1 != id2
+
+
+def test_event_id_changes_with_schema_version() -> None:
+    """Verify that event ID changes when schema version changes."""
+    from parsing.identifiers import IdentifierGenerator
+
+    id1 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "1.0")
+    id2 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "2.0")
+    assert id1 != id2
+
+
+def test_event_id_does_not_depend_on_event_time() -> None:
+    """Verify event ID does not contain event_time and is independent of it."""
+    from parsing.identifiers import IdentifierGenerator
+
+    # generate_event_id doesn't even accept time, confirming independence
+    id1 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc")
+    id2 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc")
+    assert id1 == id2
+
+
+def test_event_id_is_stable_across_processes() -> None:
+    """Verify event ID is deterministic across execution."""
+    from parsing.identifiers import IdentifierGenerator
+
+    id1 = IdentifierGenerator.generate_event_id("NODE_UPSERT", "node_1", "hash_abc", "1.0.0", "1.0")
+    # Expected value is pre-calculated SHA-256 string
+    expected = "49dd2962c937e062578cc558fadd667a2e0d80de64734105356df8f1034a0338"
+    assert id1 == expected
+
+
+# --- Forced Snapshot Refresh & Schema/Parser reprocessing Tests ---
+
+
+def test_parser_version_change_forces_full_snapshot_upsert() -> None:
+    """Verify that a different parser version in previous state triggers reprocessing and full node/edge upsert."""
+    from domain.models import CodeNode, CodeEdge
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = "hash_abc"
+    expected_file_id = "file_1"
+
+    # Previous state has different parser version "0.9.0"
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["node_1"], ["edge_1"], "0.9.0", SCHEMA_VERSION)
+
+    # Current graph has same node_1 and edge_1
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+    edge1 = CodeEdge("edge_1", expected_file_id, "node_1", "node_1", "AST_CHILD")
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[edge1],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    # Capture events published
+    published = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+    # Verify that node_1 and edge_1 are upserted even though their IDs match previous state
+    node_upserts = [e for e in published if e["event_type"] == "NODE_UPSERT"]
+    edge_upserts = [e for e in published if e["event_type"] == "EDGE_UPSERT"]
+    assert len(node_upserts) == 1
+    assert node_upserts[0]["node"]["node_id"] == "node_1"
+    assert len(edge_upserts) == 1
+    assert edge_upserts[0]["edge"]["edge_id"] == "edge_1"
+
+
+def test_schema_version_change_forces_full_snapshot_upsert() -> None:
+    """Verify that a different schema version in previous state triggers reprocessing and full snapshot upsert."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = "hash_abc"
+    expected_file_id = "file_1"
+
+    # Previous state has different schema version "0.9"
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["node_1"], [], PARSER_VERSION, "0.9")
+
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    published = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+    # Should reprocess and publish upserts
+    node_upserts = [e for e in published if e["event_type"] == "NODE_UPSERT"]
+    assert len(node_upserts) == 1
+
+
+def test_forced_refresh_deletes_removed_entities() -> None:
+    """Verify that if a version mismatch triggers reprocess, entities in old state that are no longer present are deleted."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = "hash_abc"
+    expected_file_id = "file_1"
+
+    # Previous state has old_node_1 under different parser version
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["old_node_1"], [], "0.9.0", SCHEMA_VERSION)
+
+    # Current graph has new_node_1
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("new_node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    published = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+    # Check that old_node_1 was deleted and new_node_1 was upserted
+    deletes = [e for e in published if e["event_type"] == "NODE_DELETE"]
+    upserts = [e for e in published if e["event_type"] == "NODE_UPSERT"]
+    assert len(deletes) == 1
+    assert deletes[0]["node"]["node_id"] == "old_node_1"
+    assert len(upserts) == 1
+    assert upserts[0]["node"]["node_id"] == "new_node_1"
+
+
+def test_failed_forced_refresh_preserves_previous_state() -> None:
+    """Verify that if a forced refresh encounters a publish failure, the previous state in SQLite is left unmodified."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = "hash_abc"
+    expected_file_id = "file_1"
+
+    # Previous state
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["old_node_1"], [], "0.9.0", "0.9")
+
+    # Mock parser
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("new_node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+    # Simulate publish flush failure
+    writer.flush.side_effect = PublishError("Kafka broker failed")
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    with pytest.raises(PublishError):
+        service.execute(sf)
+
+    # State store commit must NOT have been called
+    state.commit.assert_not_called()
+
+
+def test_successful_forced_refresh_updates_processing_versions() -> None:
+    """Verify that a successful forced refresh commits the current PARSER_VERSION and SCHEMA_VERSION to SQLite."""
+    from pathlib import Path
+    from parsing.identifiers import IdentifierGenerator
+    from domain.models import CodeNode
+    import hashlib
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    # Previous state
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, ["old_node_1"], [], "0.9.0", "0.9")
+
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node1 = CodeNode("new_node_1", expected_file_id, "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    service.execute(sf)
+
+    # State commit should be called with current PARSER_VERSION and SCHEMA_VERSION
+    state.commit.assert_called_once_with(
+        expected_file_id, "foo.py", content_hash, ["new_node_1"], [], PARSER_VERSION, SCHEMA_VERSION
+    )

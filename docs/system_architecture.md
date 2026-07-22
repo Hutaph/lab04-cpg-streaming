@@ -196,6 +196,7 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
 - **File ID**: `sha256(repository_id + "|" + file_path)`
 - **Node ID**: `sha256(file_id + "|" + node_type + "|" + qualified_scope + "|" + semantic_key + "|" + ast_path)`
 - **Edge ID**: `sha256(source_id + "|" + edge_type + "|" + target_id + "|" + deterministic_role)`
+- **Event ID**: `sha256(schema_version + "|" + parser_version + "|" + event_type + "|" + entity_id + "|" + content_hash)`
 - **Content Hash**: `sha256` của unmodified file raw bytes (dùng để check sự thay đổi của file).
 
 ---

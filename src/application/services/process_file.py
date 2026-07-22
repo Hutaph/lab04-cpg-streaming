@@ -15,7 +15,7 @@ from domain.models import SourceFile, ProcessingResult
 from domain.enums import ParseStatus, EventType
 from domain.events import EventFactory, EventEnvelope
 from domain.errors import ParsingError, PublishError
-from domain.constants import PARSER_VERSION
+from domain.constants import PARSER_VERSION, SCHEMA_VERSION
 from parsing.identifiers import IdentifierGenerator
 from parsing.diff import CpgDiffer
 
@@ -71,8 +71,13 @@ class ProcessFileService:
         # 3. Load previous state
         prev_state = self.state_store.get(file_id)
 
-        # 4. Check if unchanged (both content_hash and parser_version must match)
-        if prev_state and prev_state.content_hash == content_hash and prev_state.parser_version == PARSER_VERSION:
+        # 4. Check if unchanged (content_hash, parser_version, and schema_version must match)
+        if (
+            prev_state
+            and prev_state.content_hash == content_hash
+            and prev_state.parser_version == PARSER_VERSION
+            and prev_state.schema_version == SCHEMA_VERSION
+        ):
             return ProcessingResult(
                 status=ParseStatus.SKIPPED_UNCHANGED,
                 file_id=file_id,
@@ -100,7 +105,7 @@ class ProcessFileService:
             file_path=str(relative_path),
             content_hash=content_hash,
             parser_version=PARSER_VERSION,
-            schema_version="1.0",
+            schema_version=SCHEMA_VERSION,
         )
 
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -184,7 +189,9 @@ class ProcessFileService:
         # 8. Commit to SQLite State DB only after successful delivery ack
         node_ids = [n.node_id for n in current_graph.nodes]
         edge_ids = [e.edge_id for e in current_graph.edges]
-        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids, PARSER_VERSION)
+        self.state_store.commit(
+            file_id, str(relative_path), content_hash, node_ids, edge_ids, PARSER_VERSION, SCHEMA_VERSION
+        )
 
         return ProcessingResult(
             status=ParseStatus.SUCCESS,
@@ -214,7 +221,7 @@ class ProcessFileService:
             file_path=str(relative_path),
             content_hash=content_hash,
             parser_version=PARSER_VERSION,
-            schema_version="1.0",
+            schema_version=SCHEMA_VERSION,
         )
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         evt_id = IdentifierGenerator.generate_event_id(EventType.PARSER_ERROR.value, file_id, content_hash)

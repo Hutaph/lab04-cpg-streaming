@@ -80,6 +80,7 @@ class StateStorePort(Protocol):
         node_ids: list[str],
         edge_ids: list[str],
         parser_version: str,
+        schema_version: str,
     ) -> None:
         """Commits/updates file state atomically."""
         ...

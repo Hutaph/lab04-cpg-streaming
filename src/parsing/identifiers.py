@@ -4,6 +4,9 @@ import hashlib
 from pathlib import Path
 
 
+from domain.constants import PARSER_VERSION, SCHEMA_VERSION
+
+
 class IdentifierGenerator:
     """Utility class to compute deterministic hashes for CPG files, nodes, edges, and events."""
 
@@ -64,7 +67,9 @@ class IdentifierGenerator:
         event_type: str,
         entity_id: str,
         content_hash: str,
+        parser_version: str = PARSER_VERSION,
+        schema_version: str = SCHEMA_VERSION,
     ) -> str:
-        """Computes stable event_id: SHA256(event_type + '|' + entity_id + '|' + content_hash)."""
-        raw = f"{event_type}|{entity_id}|{content_hash}"
+        """Computes stable event_id: SHA256(schema_version + '|' + parser_version + '|' + event_type + '|' + entity_id + '|' + content_hash)."""
+        raw = f"{schema_version}|{parser_version}|{event_type}|{entity_id}|{content_hash}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()

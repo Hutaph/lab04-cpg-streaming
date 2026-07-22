@@ -193,9 +193,9 @@ Neo4j Ingestion trong Task 4 phải được thiết kế và kiểm chứng v�
 - **Order-tolerant ingestion.**
   Xử lý đúng khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes. Không giả định node events luôn được connector xử lý trước edge events.
 - **Idempotent upsert và delete.**
-  Việc replay cùng một mutation không được tạo duplicate node, relationship hoặc gây lỗi khi thực thể (entity) đã bị xóa.
+  Task 4 cần thiết kế Cypher `MERGE` dựa trên stable IDs và các uniqueness constraints phù hợp, sau đó kiểm chứng replay và concurrency behavior. Chỉ sử dụng `MERGE` không đủ để khẳng định ingestion đã idempotent.
 - **Stale-event protection.**
-  Sử dụng stable IDs để hỗ trợ deterministic identity và idempotent writes, kết hợp với versioning, tombstones hoặc staging để ngăn stale events ghi đè trạng thái mới hơn. Bản thân stable IDs không đủ để ngăn chặn tình trạng một upsert cũ hồi sinh dữ liệu đã bị một generation mới hơn xóa.
+  Task 4 phải đánh giá staging, guarded placeholders hoặc một cơ chế tương đương. Placeholder node chỉ được sử dụng nếu có generation/version guard ngăn stale edge events tái tạo dữ liệu đã bị xóa. Bản thân stable IDs không đủ để ngăn chặn tình trạng một upsert cũ hồi sinh dữ liệu đã bị một generation mới hơn xóa.
 - **Delete race handling.**
   Thiết kế phải xử lý trường hợp `NODE_DELETE` và `EDGE_DELETE` được nhận khác thứ tự application publish, cũng như stale `EDGE_UPSERT` đến sau delete.
 - **Kafka Connect DLQ.**

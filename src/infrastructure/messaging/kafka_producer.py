@@ -1,12 +1,20 @@
 """Kafka adapter implementing EventPublisherPort for event production streaming."""
 
 import json
+from enum import Enum
 import logging
 from typing import Any
 from application.ports import EventPublisherPort
 from domain.errors import PublishError, EventSerializationError
 
 logger = logging.getLogger(__name__)
+
+
+class ProducerState(Enum):
+    READY = "READY"
+    STAGING = "STAGING"
+    PUBLISHING = "PUBLISHING"
+    FAILED = "FAILED"
 
 
 class KafkaEventProducer(EventPublisherPort):
@@ -19,9 +27,10 @@ class KafkaEventProducer(EventPublisherPort):
         self._errors: list[str] = []
         self._failed = False
         self._batch_records: list[tuple[str, bytes, bytes]] = []
+        self._state = ProducerState.READY
 
     def _init_producer(self) -> None:
-        if self._failed:
+        if self._state == ProducerState.FAILED:
             raise PublishError("Producer is in a failed state and cannot be reused")
         if self._initialized:
             return
@@ -38,6 +47,7 @@ class KafkaEventProducer(EventPublisherPort):
             self._producer = Producer(conf)
             self._initialized = True
         except Exception as exc:
+            self._state = ProducerState.FAILED
             self._failed = True
             raise PublishError(f"Failed to initialize Kafka producer: {exc}") from exc
 
@@ -52,32 +62,43 @@ class KafkaEventProducer(EventPublisherPort):
 
     def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
         """Queue event payload to Kafka with partitioning key."""
-        if self._failed:
+        if self._state == ProducerState.FAILED:
             raise PublishError("Producer is in a failed state and cannot be reused")
+        if self._state == ProducerState.PUBLISHING:
+            raise PublishError("Cannot publish event while producer is flushing")
+
+        self._state = ProducerState.STAGING
 
         try:
             # Check for non-finite values (NaN, Infinity) which are invalid in JSON
-            # We can scan the dictionary values recursively or let json.dumps raise ValueError if allow_nan=False
             payload = json.dumps(event, ensure_ascii=False, allow_nan=False).encode("utf-8")
             key_bytes = event_key.encode("utf-8") if isinstance(event_key, str) else event_key
             self._batch_records.append((topic, key_bytes, payload))
         except (ValueError, TypeError) as exc:
             # Serialization errors occur BEFORE any Kafka side-effects, so producer remains READY/reusable!
+            self._batch_records.clear()
+            self._state = ProducerState.READY
             raise EventSerializationError(f"Failed to serialize event for topic {topic}: {exc}") from exc
 
     def flush(self) -> None:
         """Blocks until all outstanding messages in the queue are sent and checks for errors."""
-        if self._failed:
+        if self._state == ProducerState.FAILED:
             raise PublishError("Producer is in a failed state and cannot be reused")
 
-        if not self._batch_records:
+        if self._state == ProducerState.READY:
             return
 
         self._init_producer()
 
+        # Detach records atomically to prevent double publish or carry over
+        records = tuple(self._batch_records)
+        self._batch_records.clear()
+
+        self._state = ProducerState.PUBLISHING
+
         # Enqueue loop
         try:
-            for topic, key_bytes, payload in self._batch_records:
+            for topic, key_bytes, payload in records:
                 self._producer.produce(
                     topic=topic,
                     key=key_bytes,
@@ -86,22 +107,22 @@ class KafkaEventProducer(EventPublisherPort):
                 )
                 self._producer.poll(0)
         except Exception as exc:
+            self._state = ProducerState.FAILED
             self._failed = True
-            self._batch_records.clear()
             raise PublishError(f"Failed to queue messages to Kafka: {exc}") from exc
-
-        self._batch_records.clear()
 
         try:
             # Blocks until all messages in the queue are delivered/failed
             undelivered = self._producer.flush(timeout=10.0)
             if undelivered > 0:
+                self._state = ProducerState.FAILED
                 self._failed = True
                 self._errors.clear()
                 raise PublishError(f"Flush timeout: {undelivered} messages remained undelivered after timeout")
 
             # Check if any messages in the batch encountered errors in delivery callback
             if self._errors:
+                self._state = ProducerState.FAILED
                 self._failed = True
                 errs_summary = "; ".join(self._errors)
                 self._errors.clear()
@@ -109,6 +130,9 @@ class KafkaEventProducer(EventPublisherPort):
         except PublishError:
             raise
         except Exception as exc:
+            self._state = ProducerState.FAILED
             self._failed = True
             self._errors.clear()
             raise PublishError(f"Failed to flush Kafka producer: {exc}") from exc
+
+        self._state = ProducerState.READY

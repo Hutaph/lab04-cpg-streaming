@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from infrastructure.state.sqlite_state_store import SqliteStateStore
 from domain.errors import StateStoreError
-from domain.constants import PARSER_VERSION
+from domain.constants import PARSER_VERSION, SCHEMA_VERSION
 
 
 def test_sqlite_state_store_flow(tmp_path: Path) -> None:
@@ -20,24 +20,26 @@ def test_sqlite_state_store_flow(tmp_path: Path) -> None:
     edge_ids = ["e2", "e1"]
 
     # Commit state
-    store.commit(file_id, file_path, content_hash, node_ids, edge_ids, PARSER_VERSION)
+    store.commit(file_id, file_path, content_hash, node_ids, edge_ids, PARSER_VERSION, SCHEMA_VERSION)
 
     # Retrieve state
     state = store.get(file_id)
     assert state is not None
     assert state.content_hash == "hash_v1"
     assert state.parser_version == PARSER_VERSION
+    assert state.schema_version == SCHEMA_VERSION
 
     # Assert JSON lists are stored sorted deterministically
     assert state.node_ids == ["n1", "n2"]
     assert state.edge_ids == ["e1", "e2"]
 
     # Overwrite state
-    store.commit(file_id, file_path, "hash_v2", ["n3"], ["e3"], PARSER_VERSION)
+    store.commit(file_id, file_path, "hash_v2", ["n3"], ["e3"], PARSER_VERSION, SCHEMA_VERSION)
     state = store.get(file_id)
     assert state is not None
     assert state.content_hash == "hash_v2"
     assert state.parser_version == PARSER_VERSION
+    assert state.schema_version == SCHEMA_VERSION
     assert state.node_ids == ["n3"]
     assert state.edge_ids == ["e3"]
 
@@ -78,12 +80,14 @@ def test_sqlite_state_store_migration_idempotent(tmp_path: Path) -> None:
     assert state is not None
     assert state.content_hash == "hash_leg"
     assert state.parser_version is None  # Legacy column is NULL
+    assert state.schema_version is None  # Legacy column is NULL
 
     # 3. Instantiate again to verify it is idempotent
     store_again = SqliteStateStore(db_file, "repo")
     state_again = store_again.get("legacy_file")
     assert state_again is not None
     assert state_again.parser_version is None
+    assert state_again.schema_version is None
 
 
 def test_sqlite_state_store_commit_failure_rollback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,7 +96,7 @@ def test_sqlite_state_store_commit_failure_rollback(tmp_path: Path, monkeypatch:
     store = SqliteStateStore(db_file, "repo")
 
     # Commit initial state successfully
-    store.commit("f1", "f1.py", "hash_init", [], [], PARSER_VERSION)
+    store.commit("f1", "f1.py", "hash_init", [], [], PARSER_VERSION, SCHEMA_VERSION)
 
     # Mock sqlite3.connect to raise OperationalError on commit
     def mock_connect(*args, **kwargs):
@@ -103,7 +107,7 @@ def test_sqlite_state_store_commit_failure_rollback(tmp_path: Path, monkeypatch:
     monkeypatch.setattr(sq, "connect", mock_connect)
 
     with pytest.raises(StateStoreError):
-        store.commit("f1", "f1.py", "hash_new", [], [], PARSER_VERSION)
+        store.commit("f1", "f1.py", "hash_new", [], [], PARSER_VERSION, SCHEMA_VERSION)
 
     monkeypatch.undo()
 
