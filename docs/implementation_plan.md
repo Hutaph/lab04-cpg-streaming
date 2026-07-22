@@ -167,19 +167,37 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 ## 5. Danh sách Backlog và Trạng thái Tồn đọng (Backlog and Pending Status)
 
 ### 5.1. Backlog của Task 2
-Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nhằm xác nhận trạng thái của các mục tồn đọng đã ghi nhận trước đó:
-- **Đổi tên runtime verification directory**: *Still pending*. Cần chuyển từ `workspace/tmp/notebook/` sang `workspace/tmp/parser-verification/` để mô tả đúng chức năng kiểm nghiệm.
-- **Tự động dọn dẹp các tập tin SQLite runtime**: *Still pending*. Cần hỗ trợ tự động xóa các file DB phụ sau khi chạy kiểm thử.
-- **Trích xuất thông tin dòng và cột có cấu trúc cho lỗi cú pháp**: *Still pending*. Hiện tại `line` và `column` trong `PARSER_ERROR` vẫn mang giá trị mặc định null khi xảy ra `SyntaxError`.
-- **Rà soát cached notebook outputs**: *Not re-audited*. Chưa kiểm tra xem các phiên bản trước của notebook có lưu trữ vết đường dẫn cũ hay không.
-- **Ẩn các thư mục tạm khỏi project explorer**: *Still pending*. Cần cấu hình loại trừ các thư mục runtime tạm để làm sạch cấu trúc workspace.
+Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nhằm xác nhận trạng thái của các mục đã được ghi nhận trước đó:
+- **Chuẩn hóa runtime verification directories — Still pending.**
+  Implementation hiện vẫn sử dụng `workspace/tmp/notebook/` cho SQLite state và `workspace/tmp/notebook-parser/` cho JSONL output. Hai path này cần được gom về một cấu trúc semantic như `workspace/tmp/parser-verification/` trong một phiên refactor riêng.
+- **Dọn dẹp runtime verification artifacts — Still pending.**
+  Các SQLite và JSONL files sinh ra trong quá trình verification cần có cơ chế cleanup mặc định sau khi notebook hoặc verification flow kết thúc.
+- **Bổ sung `line` và `column` cho `SyntaxError` — Still pending.**
+  `PARSER_ERROR` hiện chưa lưu đầy đủ structured source position mặc dù exception message có thể chứa thông tin dòng và cột.
+- **Re-audit Task 2 cached outputs — Not re-audited.**
+  Task 2 notebook không được execute hoặc re-audit trong phiên documentation cleanup này. Cần kiểm tra cached outputs sau khi runtime paths và error fields được refactor. Việc các cached outputs không bị thay đổi trong đợt cập nhật này không đồng nghĩa với việc nội dung đó đã được kiểm chứng lại.
+- **Ẩn runtime directories khỏi project explorer — Still pending.**
+  Các thư mục verification tạm cần được loại khỏi source-oriented workspace view hoặc được cleanup để tránh bị hiểu nhầm là project artifacts.
 
-### 5.2. Hạn chế và Backlog của Task 3
-- **Giới hạn nhất quán chéo hệ thống**: Kafka và SQLite không tham gia cùng một distributed transaction. Tầng ứng dụng sử dụng cơ chế publish-before-state-commit để tránh ghi nhận trạng thái parse thành công khi việc publish lên Kafka gặp sự cố. Tuy nhiên, cơ chế này không tạo ra exactly-once end-to-end. Nếu cần mở rộng và củng cố thêm cho các luồng xử lý Kafka-to-Kafka trong tương lai, việc đánh giá Kafka Transactions có thể được xem xét; tuy nhiên, tính nhất quán toàn diện chéo hệ thống giữa Kafka, SQLite và Neo4j vẫn phải dựa trên outbox, staging, versioning, tombstones hoặc một cơ chế tương đương.
+### 5.2. Trạng thái Task 3
+Task 3 không còn thay đổi bắt buộc trong phạm vi hiện tại của Lab. Kafka broker, topic provisioning, event validation, publishing, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
+Một số edge cases bổ sung của producer hoặc verifier có thể được kiểm thử trước khi nộp bài, nhưng không phải blocker để bắt đầu Task 4.
+Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Tầng ứng dụng sử dụng cơ chế publish-before-state-commit để tránh ghi nhận trạng thái thành công khi việc publish lên Kafka gặp sự cố. Tuy nhiên, cơ chế này không tạo ra exactly-once end-to-end.
+Task 3 notebook không được execute lại vì phiên này chỉ chỉnh sửa các Markdown cells. Các cached runtime outputs từ lần kiểm chứng trước được giữ nguyên và không bị thay đổi.
 
-### 5.3. Yêu cầu thiết kế cho Task 4 (Design Prerequisites)
-Tầng downstream (Neo4j Ingestion) khi được triển khai ở Task 4 phải giải quyết các bài toán sau:
-- **Kháng xáo trộn thứ tự**: Neo4j ingestion phải được thiết kế và kiểm chứng để không phụ thuộc vào thứ tự đến giữa node và edge events (chịu được edge-before-node và các delete races).
-- **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải được triển khai và kiểm chứng để chạy idempotent.
-- **Dung sai lỗi**: Đảm bảo tin nhắn trùng lặp hoặc gửi lại (replayed) từ Kafka Connect không gây bất nhất dữ liệu trong Neo4j.
-- **Kafka Connect DLQ**: Cấu hình định tuyến sự kiện lỗi ghi sang topic `connector.errors` và thực hiện kiểm thử với các connector failure thực tế.
+### 5.3. Optional Future Considerations
+- **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.
+- **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
+
+### 5.4. Yêu cầu thiết kế cho Task 4 (Design Prerequisites)
+Neo4j Ingestion trong Task 4 phải được thiết kế và kiểm chứng với giả định rằng các event từ `cpg.nodes` và `cpg.edges` có thể được nhận theo thứ tự khác với luồng phát hành (logical publish order) của Parser Service.
+- **Order-tolerant ingestion.**
+  Xử lý đúng khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes. Không giả định node events luôn được connector xử lý trước edge events.
+- **Idempotent upsert và delete.**
+  Việc replay cùng một mutation không được tạo duplicate node, relationship hoặc gây lỗi khi thực thể (entity) đã bị xóa.
+- **Stale-event protection.**
+  Sử dụng stable IDs để hỗ trợ deterministic identity và idempotent writes, kết hợp với versioning, tombstones hoặc staging để ngăn stale events ghi đè trạng thái mới hơn. Bản thân stable IDs không đủ để ngăn chặn tình trạng một upsert cũ hồi sinh dữ liệu đã bị một generation mới hơn xóa.
+- **Delete race handling.**
+  Thiết kế phải xử lý trường hợp `NODE_DELETE` và `EDGE_DELETE` được nhận khác thứ tự application publish, cũng như stale `EDGE_UPSERT` đến sau delete.
+- **Kafka Connect DLQ.**
+  Cấu hình `connector.errors` làm Kafka Connect dead-letter topic và kiểm chứng bằng một connector processing failure thực tế. Việc topic tồn tại không được xem là bằng chứng DLQ đã hoạt động.
