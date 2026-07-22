@@ -2,6 +2,7 @@
 
 import time
 from typing import Any
+from domain.errors import PublishError, SchemaValidationError, StateStoreError
 from application.services.discover_repository import DiscoverRepositoryService
 from application.services.process_file import ProcessFileService
 from domain.enums import ParseStatus
@@ -71,6 +72,11 @@ class ProcessRepositoryService:
                         logger.error("Fail-fast triggered. Aborting loop.")
                         break
 
+            except (PublishError, SchemaValidationError, StateStoreError) as exc:
+                # Infrastructure and contract errors must immediately abort the run
+                failed += 1
+                logger.error(f"Fatal infrastructure or contract failure processing {file_path}: {exc}. Aborting loop.")
+                raise exc
             except Exception as exc:
                 failed += 1
                 error_events += 1

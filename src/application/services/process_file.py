@@ -14,7 +14,8 @@ from application.ports import (
 from domain.models import SourceFile, ProcessingResult
 from domain.enums import ParseStatus, EventType
 from domain.events import EventFactory, EventEnvelope
-from domain.errors import ParsingError, PublishError, SchemaValidationError
+from domain.errors import ParsingError, PublishError
+from domain.constants import PARSER_VERSION, SCHEMA_VERSION
 from parsing.identifiers import IdentifierGenerator
 from parsing.diff import CpgDiffer
 
@@ -70,8 +71,13 @@ class ProcessFileService:
         # 3. Load previous state
         prev_state = self.state_store.get(file_id)
 
-        # 4. Check if unchanged
-        if prev_state and prev_state.content_hash == content_hash:
+        # 4. Check if unchanged (content_hash, parser_version, and schema_version must match)
+        if (
+            prev_state
+            and prev_state.content_hash == content_hash
+            and prev_state.parser_version == PARSER_VERSION
+            and prev_state.schema_version == SCHEMA_VERSION
+        ):
             return ProcessingResult(
                 status=ParseStatus.SKIPPED_UNCHANGED,
                 file_id=file_id,
@@ -98,8 +104,8 @@ class ProcessFileService:
             file_id=file_id,
             file_path=str(relative_path),
             content_hash=content_hash,
-            parser_version="1.0.0",
-            schema_version="1.0",
+            parser_version=PARSER_VERSION,
+            schema_version=SCHEMA_VERSION,
         )
 
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -166,11 +172,7 @@ class ProcessFileService:
         serialized_events = []
         for topic, envelope in events_to_send:
             evt_dict = envelope.to_dict()
-            try:
-                self.validator.validate(envelope.event_type.value, evt_dict)
-            except SchemaValidationError as exc:
-                # Syntax error event generated on validation fail
-                return self._handle_failure(source_file, "SchemaValidationError", str(exc), content_hash)
+            self.validator.validate(envelope.event_type.value, evt_dict)
             serialized_events.append((topic, evt_dict))
 
         # Publish/Write events and flush
@@ -187,7 +189,9 @@ class ProcessFileService:
         # 8. Commit to SQLite State DB only after successful delivery ack
         node_ids = [n.node_id for n in current_graph.nodes]
         edge_ids = [e.edge_id for e in current_graph.edges]
-        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids)
+        self.state_store.commit(
+            file_id, str(relative_path), content_hash, node_ids, edge_ids, PARSER_VERSION, SCHEMA_VERSION
+        )
 
         return ProcessingResult(
             status=ParseStatus.SUCCESS,
@@ -216,8 +220,8 @@ class ProcessFileService:
             file_id=file_id,
             file_path=str(relative_path),
             content_hash=content_hash,
-            parser_version="1.0.0",
-            schema_version="1.0",
+            parser_version=PARSER_VERSION,
+            schema_version=SCHEMA_VERSION,
         )
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         evt_id = IdentifierGenerator.generate_event_id(EventType.PARSER_ERROR.value, file_id, content_hash)
@@ -233,12 +237,9 @@ class ProcessFileService:
         evt_dict = envelope.to_dict()
 
         # Validate
-        try:
-            self.validator.validate(envelope.event_type.value, evt_dict)
-        except SchemaValidationError:
-            pass  # Avoid infinite error loop, push raw
+        self.validator.validate(envelope.event_type.value, evt_dict)
 
-        # Push to dead-letter error queue
+        # Publish error event to parser error topic
         try:
             self._write(self.topic_errors, file_id, evt_dict)
             self.writer.flush()

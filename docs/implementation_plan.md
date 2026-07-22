@@ -44,12 +44,25 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 ### Phase 7 — Kafka producer and topic creation
 - **Mục tiêu**: Thiết lập Kafka Broker ở local và viết Adapter đẩy event trực tiếp từ Parser Service vào Kafka.
 - **Output**: Sự kiện được gửi thành công vào các topic Kafka tương ứng.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Hoàn thành (Verified)**.
+- **Yêu cầu & Xác minh (Requirements & Verification)**:
+  - Các lỗi phân tích cú pháp (Parser errors) được publish chủ động sang topic `parser.errors`.
+  - Schema và routing của topic `parser.errors` được xác minh thông qua script kiểm tra và notebook.
+  - Không thực hiện xác minh Kafka Connect DLQ trong Task 3 (chỉ kiểm thử luồng lỗi parser nghiệp vụ).
 
 ### Phase 8 — Neo4j Kafka Sink
 - **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
 - **Output**: Đồ thị Neo4j được cập nhật tự động dựa trên Cypher MERGE query.
 - **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Yêu cầu Thiết kế (Design Requirements)**:
+  - **Kháng xáo trộn thứ tự Node-Edge**: Edge ingestion phải chấp nhận và xử lý được trường hợp các node đầu/cuối của cạnh chưa tồn tại trong Neo4j (ví dụ: tạo placeholder node và bổ sung thuộc tính sau).
+  - **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải chạy idempotent (không báo lỗi khi đối tượng cần xóa chưa tồn tại hoặc đã bị xóa trước đó).
+  - **Tránh xung đột do Replay**: Sự kiện trùng lặp do retry hoặc replay từ Kafka Connect phải không gây bất nhất hay trùng lặp phần tử đồ thị trong Neo4j.
+  - **Cấu hình Kafka Connect DLQ**: Cấu hình Kafka Connect DLQ định tuyến sang topic `connector.errors` cho các lỗi ghi Neo4j Sink.
+  - **Dung sai lỗi Connector**: Kích hoạt cơ chế connector error tolerance phù hợp với đặc tả yêu cầu của Đồ án.
+  - **Bảo toàn bản ghi gốc**: Đảm bảo DLQ bảo toàn bản ghi gốc bị lỗi và đính kèm ngữ cảnh lỗi/headers hữu ích nếu được hỗ trợ.
+  - **Kiểm chứng DLQ thực tế**: Minh họa bằng chứng thực tế về một lỗi ghi connector rơi vào topic `connector.errors` thay vì gửi tin nhắn test giả tạo trực tiếp lên DLQ.
+  - **Kiểm thử Ingestion**: Bộ test kiểm nghiệm Task 4 bắt buộc phải bao gồm kịch bản kiểm tra hành vi xử lý cạnh đến trước node (edge-before-node handling).
 
 ### Phase 9 — Spark Structured Streaming
 - **Mục tiêu**: Viết ứng dụng Spark Structured Streaming đọc metadata event từ Kafka.
@@ -125,9 +138,9 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **Call edges** | Trích xuất cuộc gọi hàm kết nối tới CallTarget | [call_builder.py](../src/parsing/call_builder.py) | Nút CallTarget và cạnh CALLS nối từ nút gọi hàm | **Verified locally** |
 | **Bounded memory** | Parse tuần tự từng file, giải phóng bộ nhớ ngay sau đó | [process_file.py](../src/application/services/process_file.py) | Log giám sát dung lượng RAM tiêu thụ cố định khi chạy | **Verified locally** |
 | **Stable IDs** | Hàm hash sha256 sinh ID ổn định từ thuộc tính cố định | [identifiers.py](../src/parsing/identifiers.py) | Unit test chứng minh ID không đổi qua các lần chạy | **Verified locally** |
-| **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Scaffolded** |
-| **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Scaffolded** |
-| **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Scaffolded** |
+| **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Verified** |
+| **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Verified** |
+| **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Verified** |
 | **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Scaffolded** |
 | **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Scaffolded** |
 | **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Dataframe streaming lọc `FILE_METADATA_UPSERT` từ topic `source.metadata` | **Implemented, Docker E2E verified** |
@@ -148,3 +161,63 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 ## 4. Hướng dẫn Nộp bài (Moodle Submission Rules)
 - Bài thực hành được nộp chính thức dưới dạng **root URL của published Jupyter Book** (GitHub Pages).
 - Moodle **chỉ nhận đúng 1 text entry** chứa URL này. Không chấp nhận nộp file nén ZIP, tệp tài liệu PDF hoặc Word.
+
+---
+
+## 5. Danh sách Backlog và Trạng thái Tồn đọng (Backlog and Pending Status)
+
+### 5.1. Backlog của Task 2
+Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nhằm xác nhận trạng thái của các mục đã được ghi nhận trước đó:
+- **Chuẩn hóa runtime verification directories — Still pending.**
+  Implementation hiện vẫn sử dụng `workspace/tmp/notebook/` cho SQLite state và `workspace/tmp/notebook-parser/` cho JSONL output. Hai path này cần được gom về một cấu trúc semantic như `workspace/tmp/parser-verification/` trong một phiên refactor riêng.
+- **Dọn dẹp runtime verification artifacts — Still pending.**
+  Các SQLite và JSONL files sinh ra trong quá trình verification cần có cơ chế cleanup mặc định sau khi notebook hoặc verification flow kết thúc.
+- **Bổ sung `line` và `column` cho `SyntaxError` — Still pending.**
+  `PARSER_ERROR` hiện chưa lưu đầy đủ structured source position mặc dù exception message có thể chứa thông tin dòng và cột.
+- **Re-audit Task 2 cached outputs — Not re-audited.**
+  Task 2 notebook không được execute hoặc re-audit trong phiên documentation cleanup này. Cần kiểm tra cached outputs sau khi runtime paths và error fields được refactor. Việc các cached outputs không bị thay đổi trong đợt cập nhật này không đồng nghĩa với việc nội dung đó đã được kiểm chứng lại.
+- **Ẩn runtime directories khỏi project explorer — Still pending.**
+  Các thư mục verification tạm cần được loại khỏi source-oriented workspace view hoặc được cleanup để tránh bị hiểu nhầm là project artifacts.
+
+### 5.2. Trạng thái Task 3
+Task 3 đã hoàn thành các bước rà soát biên an toàn và kiểm chứng. Kafka broker, topic provisioning, event validation, full-batch pre-serialization, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
+Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling chưa được kiểm chứng trong Task 3.
+Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của cả ba Phase trong cùng một lần chạy.
+
+#### Accepted Limitations of Task 3
+
+Các giới hạn dưới đây được biết đến và chấp nhận trong phạm vi Task 3. Chúng không phải là lỗi cần sửa trong Task 3.
+
+1. **Single broker topology**: Pipeline chạy trên một KRaft broker với replication factor 1.
+2. **No High Availability**: Không có broker redundancy hoặc failover.
+3. **Local `acks=all` semantics**: Trong topology hiện tại, `acks=all` chỉ chờ ISR duy nhất (broker đơn), không tạo broker redundancy.
+4. **No Kafka–SQLite distributed transaction**: Kafka và SQLite không cùng tham gia một atomic distributed transaction.
+5. **Partial delivery possibility**: Sau khi Kafka enqueue bắt đầu, một phần batch có thể đã được broker nhận trước khi failure được phát hiện.
+6. **Crash-window duplicate replay**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng batch được publish lại ở lần chạy tiếp theo.
+7. **Producer idempotence scope**: `enable.idempotence=True` giúp giảm duplicate do retry trong cùng một producer session. Nó không loại bỏ duplicate giữa các process runs, không đồng bộ Kafka với SQLite, và không xử lý side effects trên Neo4j hoặc MongoDB.
+8. **No cross-topic ordering**: Kafka không bảo đảm ordering giữa `cpg.nodes`, `cpg.edges`, `source.metadata` và `parser.errors`.
+9. **Per-partition ordering only**: Ordering chỉ được bảo toàn trong từng topic partition.
+10. **Partition remapping**: Thay đổi partition count có thể ánh xạ cùng `file_id` sang partition khác.
+11. **Limited topic drift detection**: Topic provisioning hiện kiểm tra partition count và replication factor; không xác nhận toàn bộ Kafka topic configuration.
+12. **Synchronous processing assumption**: Processing flow hiện tại giả định single-process execution tuần tự.
+13. **Downstream idempotency not implemented**: Neo4j idempotent ingestion chưa được triển khai hoặc runtime verified (Task 4).
+14. **Stale-event protection not implemented**: Version/tombstone/staging/generation guards thuộc Task 4.
+15. **Kafka Connect DLQ not verified**: `connector.errors` là planned topic; Kafka Connect DLQ behavior chưa được runtime verified trong Task 3.
+16. **Hard-kill cleanup limitation**: Python `try/finally` không chạy nếu process bị hard kill (`SIGKILL`); safe cleanup chỉ giảm nguy cơ để lại artifacts trong trường hợp bình thường.
+
+### 5.3. Optional Future Considerations
+- **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.
+- **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
+
+### 5.4. Yêu cầu thiết kế cho Task 4 (Design Prerequisites)
+Neo4j Ingestion trong Task 4 phải được thiết kế và kiểm chứng với giả định rằng các event từ `cpg.nodes` và `cpg.edges` có thể được nhận theo thứ tự khác với luồng phát hành (logical publish order) của Parser Service.
+- **Order-tolerant ingestion.**
+  Xử lý đúng khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes. Không giả định node events luôn được connector xử lý trước edge events.
+- **Idempotent upsert và delete.**
+  Task 4 cần thiết kế Cypher `MERGE` dựa trên stable IDs và các uniqueness constraints phù hợp, sau đó kiểm chứng replay và concurrency behavior. Chỉ sử dụng `MERGE` không đủ để khẳng định ingestion đã idempotent.
+- **Stale-event protection.**
+  Task 4 phải đánh giá staging, guarded placeholders hoặc một cơ chế tương đương. Placeholder node chỉ được sử dụng nếu có generation/version guard ngăn stale edge events tái tạo dữ liệu đã bị xóa. Bản thân stable IDs không đủ để ngăn chặn tình trạng một upsert cũ hồi sinh dữ liệu đã bị một generation mới hơn xóa.
+- **Delete race handling.**
+  Thiết kế phải xử lý trường hợp `NODE_DELETE` và `EDGE_DELETE` được nhận khác thứ tự application publish, cũng như stale `EDGE_UPSERT` đến sau delete.
+- **Kafka Connect DLQ.**
+  Cấu hình `connector.errors` làm Kafka Connect dead-letter topic và kiểm chứng bằng một connector processing failure thực tế. Việc topic tồn tại không được xem là bằng chứng DLQ đã hoạt động.

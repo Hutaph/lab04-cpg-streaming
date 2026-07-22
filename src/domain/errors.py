@@ -23,3 +23,7 @@ class PublishError(DomainError):
 
 class SchemaValidationError(DomainError):
     """Raised when an event fails JSON schema validation."""
+
+
+class EventSerializationError(DomainError):
+    """Raised when an event fails to serialize to JSON bytes."""

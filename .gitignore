@@ -44,3 +44,15 @@ metastore_db/
 derby.log
 
 .vscode/
+
+# Python package metadata
+*.egg-info/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

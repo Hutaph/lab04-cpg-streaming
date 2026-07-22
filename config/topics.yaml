@@ -26,12 +26,12 @@ topics:
     partitions: 1
     replication_factor: 1
     key: "id"
-    purpose: "Dead letter queue for syntax and parser failures"
+    purpose: "Parser Service error event topic for PARSER_ERROR events"
     consumer: "Audit Logs / Monitoring"
 
   - name: "connector.errors"
     partitions: 1
     replication_factor: 1
     key: "id"
-    purpose: "Kafka Connect sink write failure logging"
+    purpose: "Kafka Connect dead-letter topic reserved for downstream connector failures"
     consumer: "Infrastructure alert monitoring"

@@ -94,12 +94,8 @@ def build_metadata_stream(spark: Any, config: JobConfig) -> Any:
         .load()
     )
 
-    parsed_events = raw_events.select(
-        from_json(col("value").cast("string"), metadata_event_schema()).alias("event")
-    )
-    valid_events = parsed_events.where(
-        col("event").isNotNull() & (col("event.event_type") == "FILE_METADATA_UPSERT")
-    )
+    parsed_events = raw_events.select(from_json(col("value").cast("string"), metadata_event_schema()).alias("event"))
+    valid_events = parsed_events.where(col("event").isNotNull() & (col("event.event_type") == "FILE_METADATA_UPSERT"))
 
     event_fields = [
         "schema_version",

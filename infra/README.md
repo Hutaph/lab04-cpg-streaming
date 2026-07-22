@@ -2,7 +2,7 @@
 
 Thư mục này chi tiết các hướng dẫn cài đặt dockerized cho các thành phần hạ tầng phát triển local (Kafka, Neo4j, MongoDB, Spark).
 
-## Khởi chạy hạ tầng
+## Chuẩn bị môi trường
 
 Tạo file môi trường local và điền các password nếu file chưa tồn tại:
 
@@ -14,10 +14,17 @@ Tối thiểu cần điền `MONGO_ROOT_PASSWORD` và `NEO4J_PASSWORD`. URI
 `MONGODB_URI` phải dùng cùng password MongoDB và thêm `authSource=admin`.
 File `.env` đã được thêm vào `.gitignore`; không commit file này.
 
-Khởi động các service cần cho Task 5:
+## Khởi chạy hạ tầng
+
+### 1. Khởi chạy Kafka Broker (KRaft Mode)
+
+Kafka chạy ở chế độ KRaft (không cần Zookeeper). Đây là cấu hình chuẩn của Task 3.
+*Lưu ý: Task 5 notebook đã được thực thi với image Confluent Kafka 7.3.0 ở chế độ Zookeeper trong môi trường docker riêng khi triển khai. Cấu hình hiện tại dùng KRaft (Kafka 7.4.0); `source.metadata` vẫn hoạt động bình thường trên cả hai chế độ.*
+
+Chạy lệnh sau từ thư mục root của dự án:
 
 ```bash
-docker compose --env-file .env -f infra/docker-compose.yml up -d zookeeper kafka mongodb
+docker compose --env-file .env -f infra/docker-compose.yml up -d kafka
 ```
 
 Kiểm tra trạng thái:
@@ -26,15 +33,37 @@ Kiểm tra trạng thái:
 docker compose --env-file .env -f infra/docker-compose.yml ps
 ```
 
-Tạo topic Task 5 sau khi broker sẵn sàng:
+### 2. Khởi tạo các topic bắt buộc
 
-```powershell
+Sau khi Kafka Broker ở trạng thái healthy, chạy script để khởi tạo các topic:
+
+```bash
+./scripts/create_topics.sh
+```
+
+Hoặc tạo riêng topic `source.metadata` (dùng cho Task 5):
+
+```bash
 docker exec cpg-kafka kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic source.metadata --partitions 1 --replication-factor 1
 ```
 
 Script `infra/kafka/create-topics.sh` tạo toàn bộ topics nếu máy host đã có Kafka CLI.
-Trong container Kafka, dùng bootstrap server `kafka:29092`; từ máy host, dùng
-`localhost:9092`.
+Trong container Kafka, dùng bootstrap server `kafka:29092`; từ máy host, dùng `localhost:9092`.
+
+Các topic được cấu hình bao gồm:
+- **Required Task 3 topics**:
+  - `cpg.nodes`: Chứa các sự kiện trích xuất nodes (3 partitions).
+  - `cpg.edges`: Chứa các sự kiện trích xuất edges (3 partitions).
+  - `source.metadata`: Chứa metadata thông tin và thống kê của file (1 partition). Được consume bởi Spark Structured Streaming (Task 5).
+  - `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại (1 partition).
+- **Planned Kafka Connect DLQ topic**:
+  - `connector.errors`: Dead Letter Queue chứa các sự kiện lỗi từ Kafka Connect (được cấu hình và kiểm chứng ở Task 4) (1 partition).
+
+### 3. Khởi chạy MongoDB (cho Task 5)
+
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb
+```
 
 ## Dừng hạ tầng
 
