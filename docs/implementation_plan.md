@@ -161,3 +161,25 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 ## 4. Hướng dẫn Nộp bài (Moodle Submission Rules)
 - Bài thực hành được nộp chính thức dưới dạng **root URL của published Jupyter Book** (GitHub Pages).
 - Moodle **chỉ nhận đúng 1 text entry** chứa URL này. Không chấp nhận nộp file nén ZIP, tệp tài liệu PDF hoặc Word.
+
+---
+
+## 5. Danh sách Backlog và Trạng thái Tồn đọng (Backlog and Pending Status)
+
+### 5.1. Backlog của Task 2
+Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nhằm xác nhận trạng thái của các mục tồn đọng đã ghi nhận trước đó:
+- **Đổi tên runtime verification directory**: *Still pending*. Cần chuyển từ `workspace/tmp/notebook/` sang `workspace/tmp/parser-verification/` để mô tả đúng chức năng kiểm nghiệm.
+- **Tự động dọn dẹp các tập tin SQLite runtime**: *Still pending*. Cần hỗ trợ tự động xóa các file DB phụ sau khi chạy kiểm thử.
+- **Trích xuất thông tin dòng và cột có cấu trúc cho lỗi cú pháp**: *Still pending*. Hiện tại `line` và `column` trong `PARSER_ERROR` vẫn mang giá trị mặc định null khi xảy ra `SyntaxError`.
+- **Rà soát cached notebook outputs**: *Not re-audited*. Chưa kiểm tra xem các phiên bản trước của notebook có lưu trữ vết đường dẫn cũ hay không.
+- **Ẩn các thư mục tạm khỏi project explorer**: *Still pending*. Cần cấu hình loại trừ các thư mục runtime tạm để làm sạch cấu trúc workspace.
+
+### 5.2. Hạn chế và Backlog của Task 3
+- **Giới hạn nhất quán chéo hệ thống**: Kafka và SQLite không tham gia cùng một distributed transaction. Tầng ứng dụng sử dụng cơ chế publish-before-state-commit để tránh ghi nhận trạng thái parse thành công khi việc publish lên Kafka gặp sự cố. Tuy nhiên, cơ chế này không tạo ra exactly-once end-to-end. Nếu cần mở rộng và củng cố thêm cho các luồng xử lý Kafka-to-Kafka trong tương lai, việc đánh giá Kafka Transactions có thể được xem xét; tuy nhiên, tính nhất quán toàn diện chéo hệ thống giữa Kafka, SQLite và Neo4j vẫn phải dựa trên outbox, staging, versioning, tombstones hoặc một cơ chế tương đương.
+
+### 5.3. Yêu cầu thiết kế cho Task 4 (Design Prerequisites)
+Tầng downstream (Neo4j Ingestion) khi được triển khai ở Task 4 phải giải quyết các bài toán sau:
+- **Kháng xáo trộn thứ tự**: Neo4j ingestion phải được thiết kế và kiểm chứng để không phụ thuộc vào thứ tự đến giữa node và edge events (chịu được edge-before-node và các delete races).
+- **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải được triển khai và kiểm chứng để chạy idempotent.
+- **Dung sai lỗi**: Đảm bảo tin nhắn trùng lặp hoặc gửi lại (replayed) từ Kafka Connect không gây bất nhất dữ liệu trong Neo4j.
+- **Kafka Connect DLQ**: Cấu hình định tuyến sự kiện lỗi ghi sang topic `connector.errors` và thực hiện kiểm thử với các connector failure thực tế.

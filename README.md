@@ -8,9 +8,9 @@
 - **Repository nguồn phân tích**: `huggingface/transformers-pr-agent` (shallow clone tại runtime vào thư mục `workspace/source/`).
 - **Mục tiêu**: Phân tích cú pháp sinh AST, CFG, DFG, Call graph từ mã nguồn Python để phục vụ phân tích tĩnh, xử lý streaming thời gian thực.
 - **Tiến độ Hiện tại**:
-  - **Task 1 & Task 2**: Đã hoàn thành và kiểm chứng (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
-  - **Task 3 (Kafka Ingestion)**: Đã hoàn thành và kiểm chứng (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh schema/partitioning).
-  - **Task 4, 5 & 6**: Đã scaffold sẵn cấu trúc config, sẽ triển khai trong các phase tiếp theo.
+  - **Task 1 & Task 2**: Đã triển khai và kiểm chứng cục bộ (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
+  - **Task 3 (Kafka Ingestion)**: Đã triển khai và kiểm chứng trong phạm vi môi trường local (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh cấu trúc/phân vùng).
+  - **Task 4, 5 & 6**: Đã scaffold cấu trúc cấu hình ban đầu; các công việc thiết kế và kiểm chứng tiếp theo thuộc phạm vi Task 4.
 
 ---
 
