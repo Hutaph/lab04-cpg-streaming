@@ -19,7 +19,7 @@ Lab 04 yêu cầu xây dựng một pipeline xử lý streaming tăng dần đ�
 Hệ thống được thiết kế nhằm giải quyết bài toán trích xuất graph mã nguồn ở quy mô lớn với các tiêu chí:
 - **Tăng dần (Incremental)**: Chỉ parse và gửi sự kiện cho các file bị chỉnh sửa hoặc thêm mới, tránh parse lại toàn bộ dự án.
 - **Tiết kiệm bộ nhớ (Bounded Memory)**: Xử lý theo từng file độc lập thay vì load toàn bộ repository vào memory.
-- **Kháng trùng lặp (Idempotent)**: Đảm bảo khi chạy lại (replay) cùng một dữ liệu thì Neo4j và MongoDB không phát sinh bản ghi trùng lặp.
+- **Kháng trùng lặp (Idempotent)**: Mục tiêu thiết kế là khi chạy lại (replay) cùng một dữ liệu thì Neo4j và MongoDB không phát sinh bản ghi trùng lặp. Cơ sở là Stable deterministic IDs kết hợp Cypher `MERGE` và uniqueness constraints (Task 4); duplicate handling đầu cuối chưa được kiểm chứng trong Task 3.
 - **Tách biệt lưu trữ**: Sử dụng Neo4j chuyên dụng cho Graph và MongoDB cho tài liệu metadata.
 
 ---
@@ -277,7 +277,7 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
 ### Quyết định 3: Thiết lập Stable ID deterministic bằng SHA-256
 - **Bối cảnh**: Khi re-run parser hoặc re-play file chỉnh sửa, Neo4j và MongoDB cần cập nhật đúng bản ghi thay vì tạo mới trùng lặp.
 - **Giải pháp**: Không dùng UUID ngẫu nhiên. Mọi node, edge và file được gán định danh bằng cách băm SHA-256 các thuộc tính cố định.
-- **Hệ quả**: Đảm bảo tính idempotency khi ghi dữ liệu.
+- **Hệ quả**: Tạo nền tảng định danh ổn định để Task 4 triển khai idempotent writes bằng Cypher `MERGE` và uniqueness constraints. Stable IDs là điều kiện cần nhưng chưa đủ; hành vi idempotent của Neo4j và MongoDB phải được thiết kế và kiểm chứng ở Task 4.
 
 ### Quyết định 4: Bố cục Topic Kafka rạch ròi
 - **Bối cảnh**: Pipeline cần truyền nhiều loại sự kiện (nodes, edges, metadata, errors). Việc gộp chung làm tăng tải lọc tin nhắn cho consumers.

@@ -184,6 +184,27 @@ Task 3 đã hoàn thành các bước rà soát biên an toàn và kiểm chứn
 Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai idempotent database writes; duplicate handling chưa được kiểm chứng trong Task 3.
 Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của cả ba Phase trong cùng một lần chạy.
 
+#### Accepted Limitations of Task 3
+
+Các giới hạn dưới đây được biết đến và chấp nhận trong phạm vi Task 3. Chúng không phải là lỗi cần sửa trong Task 3.
+
+1. **Single broker topology**: Pipeline chạy trên một KRaft broker với replication factor 1.
+2. **No High Availability**: Không có broker redundancy hoặc failover.
+3. **Local `acks=all` semantics**: Trong topology hiện tại, `acks=all` chỉ chờ ISR duy nhất (broker đơn), không tạo broker redundancy.
+4. **No Kafka–SQLite distributed transaction**: Kafka và SQLite không cùng tham gia một atomic distributed transaction.
+5. **Partial delivery possibility**: Sau khi Kafka enqueue bắt đầu, một phần batch có thể đã được broker nhận trước khi failure được phát hiện.
+6. **Crash-window duplicate replay**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng batch được publish lại ở lần chạy tiếp theo.
+7. **Producer idempotence scope**: `enable.idempotence=True` giúp giảm duplicate do retry trong cùng một producer session. Nó không loại bỏ duplicate giữa các process runs, không đồng bộ Kafka với SQLite, và không xử lý side effects trên Neo4j hoặc MongoDB.
+8. **No cross-topic ordering**: Kafka không bảo đảm ordering giữa `cpg.nodes`, `cpg.edges`, `source.metadata` và `parser.errors`.
+9. **Per-partition ordering only**: Ordering chỉ được bảo toàn trong từng topic partition.
+10. **Partition remapping**: Thay đổi partition count có thể ánh xạ cùng `file_id` sang partition khác.
+11. **Limited topic drift detection**: Topic provisioning hiện kiểm tra partition count và replication factor; không xác nhận toàn bộ Kafka topic configuration.
+12. **Synchronous processing assumption**: Processing flow hiện tại giả định single-process execution tuần tự.
+13. **Downstream idempotency not implemented**: Neo4j idempotent ingestion chưa được triển khai hoặc runtime verified (Task 4).
+14. **Stale-event protection not implemented**: Version/tombstone/staging/generation guards thuộc Task 4.
+15. **Kafka Connect DLQ not verified**: `connector.errors` là planned topic; Kafka Connect DLQ behavior chưa được runtime verified trong Task 3.
+16. **Hard-kill cleanup limitation**: Python `try/finally` không chạy nếu process bị hard kill (`SIGKILL`); safe cleanup chỉ giảm nguy cơ để lại artifacts trong trường hợp bình thường.
+
 ### 5.3. Optional Future Considerations
 - **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.
 - **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
