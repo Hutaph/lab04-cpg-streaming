@@ -171,8 +171,8 @@ Hệ thống cấu hình 5 topics Kafka rạch ròi:
   - Topic offsets của các topic khác nhau là cục bộ và không thể so sánh hay đối chiếu để suy luận thứ tự.
   - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
 - **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
-- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai idempotent database writes; duplicate handling chưa được kiểm chứng trong Task 3.
-- **Tính nhất quán chéo hệ thống**: Task 3 không cung cấp consistency toàn hệ thống. Order-tolerant ingestion, idempotent mutations và stale-event protection phải được triển khai và kiểm chứng ở Task 4.
+- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling chưa được kiểm chứng trong Task 3.
+- **Tính nhất quán chéo hệ thống**: Task 3 không cung cấp consistency toàn hệ thống. Order-tolerant ingestion, idempotent mutations và stale-event protection cho Neo4j phải được triển khai và kiểm chứng ở Task 4. Spark Structured Streaming và MongoDB upsert semantics thuộc metadata streaming task tương ứng.
 
 ### 8.2 Error Topic Semantics (Cơ chế và phân loại lỗi hệ thống)
 Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độc lập:
@@ -277,7 +277,7 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
 ### Quyết định 3: Thiết lập Stable ID deterministic bằng SHA-256
 - **Bối cảnh**: Khi re-run parser hoặc re-play file chỉnh sửa, Neo4j và MongoDB cần cập nhật đúng bản ghi thay vì tạo mới trùng lặp.
 - **Giải pháp**: Không dùng UUID ngẫu nhiên. Mọi node, edge và file được gán định danh bằng cách băm SHA-256 các thuộc tính cố định.
-- **Hệ quả**: Tạo nền tảng định danh ổn định để Task 4 triển khai idempotent writes bằng Cypher `MERGE` và uniqueness constraints. Stable IDs là điều kiện cần nhưng chưa đủ; hành vi idempotent của Neo4j và MongoDB phải được thiết kế và kiểm chứng ở Task 4.
+- **Hệ quả**: Tạo nền tảng định danh ổn định để Task 4 triển khai Neo4j idempotent writes bằng Cypher `MERGE` và uniqueness constraints. Stable IDs là điều kiện cần nhưng chưa đủ; hành vi idempotent của Neo4j phải được thiết kế và kiểm chứng ở Task 4. MongoDB upsert semantics và Spark checkpoint recovery thuộc metadata streaming task tương ứng.
 
 ### Quyết định 4: Bố cục Topic Kafka rạch ròi
 - **Bối cảnh**: Pipeline cần truyền nhiều loại sự kiện (nodes, edges, metadata, errors). Việc gộp chung làm tăng tải lọc tin nhắn cho consumers.
