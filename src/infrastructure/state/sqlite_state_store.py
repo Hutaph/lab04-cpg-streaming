@@ -35,6 +35,12 @@ class SqliteStateStore(StateStorePort):
                     )
                     """
                 )
+                # Idempotently add parser_version column if missing (migration)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA table_info(file_state)")
+                columns = [row[1] for row in cursor.fetchall()]
+                if "parser_version" not in columns:
+                    conn.execute("ALTER TABLE file_state ADD COLUMN parser_version TEXT")
                 conn.commit()
         except sqlite3.Error as exc:
             raise StateStoreError(f"Failed to initialize SQLite state store: {exc}") from exc
@@ -45,14 +51,14 @@ class SqliteStateStore(StateStorePort):
             with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT content_hash, node_ids_json, edge_ids_json FROM file_state WHERE file_id = ?",
+                    "SELECT content_hash, node_ids_json, edge_ids_json, parser_version FROM file_state WHERE file_id = ?",
                     (file_id,),
                 )
                 row = cursor.fetchone()
                 if not row:
                     return None
 
-                content_hash, node_ids_json, edge_ids_json = row
+                content_hash, node_ids_json, edge_ids_json, parser_version = row
                 node_ids = json.loads(node_ids_json)
                 edge_ids = json.loads(edge_ids_json)
                 return FileState(
@@ -60,6 +66,7 @@ class SqliteStateStore(StateStorePort):
                     content_hash=content_hash,
                     node_ids=node_ids,
                     edge_ids=edge_ids,
+                    parser_version=parser_version,
                 )
         except sqlite3.Error as exc:
             raise StateStoreError(f"Failed to read file state for {file_id}: {exc}") from exc
@@ -71,6 +78,7 @@ class SqliteStateStore(StateStorePort):
         content_hash: str,
         node_ids: list[str],
         edge_ids: list[str],
+        parser_version: str,
     ) -> None:
         """Saves file parsing results and IDs as sorted deterministic JSON lists."""
         node_ids_json = json.dumps(sorted(node_ids))
@@ -82,13 +90,14 @@ class SqliteStateStore(StateStorePort):
                 conn.execute(
                     """
                     INSERT INTO file_state (
-                        file_id, repository_id, file_path, content_hash, node_ids_json, edge_ids_json, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        file_id, repository_id, file_path, content_hash, node_ids_json, edge_ids_json, updated_at, parser_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(file_id) DO UPDATE SET
                         content_hash = excluded.content_hash,
                         node_ids_json = excluded.node_ids_json,
                         edge_ids_json = excluded.edge_ids_json,
-                        updated_at = excluded.updated_at
+                        updated_at = excluded.updated_at,
+                        parser_version = excluded.parser_version
                     """,
                     (
                         file_id,
@@ -98,6 +107,7 @@ class SqliteStateStore(StateStorePort):
                         node_ids_json,
                         edge_ids_json,
                         updated_at,
+                        parser_version,
                     ),
                 )
                 conn.commit()

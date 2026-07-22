@@ -72,7 +72,15 @@ class StateStorePort(Protocol):
         """Retrieves last parsed file state."""
         ...
 
-    def commit(self, file_id: str, file_path: str, content_hash: str, node_ids: list[str], edge_ids: list[str]) -> None:
+    def commit(
+        self,
+        file_id: str,
+        file_path: str,
+        content_hash: str,
+        node_ids: list[str],
+        edge_ids: list[str],
+        parser_version: str,
+    ) -> None:
         """Commits/updates file state atomically."""
         ...
 

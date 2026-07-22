@@ -14,14 +14,14 @@ def test_unchanged_skip_flow() -> None:
     repo.read_file.return_value = b"x = 1"
 
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_abc", [], [])
+    state.get.return_value = FileState("file_id", "hash_abc", [], [], "1.0.0")
 
     # The computed hash of b"x = 1" is "a053...". We force mocking to return equal hash
     # Or we can let it calculate naturally
     import hashlib
 
     content_hash = hashlib.sha256(b"x = 1").hexdigest()
-    state.get.return_value = FileState("file_id", content_hash, [], [])
+    state.get.return_value = FileState("file_id", content_hash, [], [], "1.0.0")
 
     parser = Mock()
     validator = Mock()
@@ -102,7 +102,7 @@ def test_process_file_publishes_events_in_logical_order() -> None:
 
     # Set up previous state containing nodes and edges to trigger removals
     state = Mock()
-    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"])
+    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"], "1.0.0")
 
     # Mock parser
     meta = FileMetadata("file_id", "test_repo", "foo.py", "new_hash", 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS)
@@ -445,7 +445,7 @@ def test_previous_state_preserved_on_publish_failure() -> None:
 
     # Previous state contains state A
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"])
+    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"], "1.0.0")
 
     # Mock parser output for version B
     meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_version_B", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
@@ -530,3 +530,128 @@ def test_unicode_identifiers_serialization() -> None:
     assert res.status == ParseStatus.SUCCESS
     if hasattr(writer, "publish_event"):
         writer.publish_event.assert_called()
+
+
+def test_repository_aborts_after_infrastructure_failure() -> None:
+    """Verify that if processing a file raises PublishError, ProcessRepositoryService aborts immediately without processing remaining files."""
+    from application.services.process_repository import ProcessRepositoryService
+
+    discover_service = Mock()
+    sf1 = SourceFile("repo", "root", "file1.py", "c1", 10)
+    sf2 = SourceFile("repo", "root", "file2.py", "c1", 10)
+    discover_service.execute.return_value = [sf1, sf2]
+
+    process_file_service = Mock()
+    process_file_service.execute.side_effect = PublishError("Kafka broker down")
+
+    repo_service = ProcessRepositoryService(
+        discover_service=discover_service,
+        process_file_service=process_file_service,
+    )
+
+    with pytest.raises(PublishError):
+        repo_service.execute()
+
+    # The loop should have aborted after the first file
+    process_file_service.execute.assert_called_once_with(sf1)
+
+
+def test_parser_version_change_reprocesses_unchanged_source() -> None:
+    """Verify that if content_hash matches but parser_version is different, skipping is disabled and file is reprocessed."""
+    from pathlib import Path
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    # Previous state has the same content_hash but a different parser_version ("0.9.0")
+    import hashlib
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, [], [], "0.9.0")
+
+    # Mock parser to return new graph
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 0, 0, 1, ParseStatus.SUCCESS
+    )
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    # Status should be SUCCESS (reprocessed), not SKIPPED_UNCHANGED
+    assert res.status == ParseStatus.SUCCESS
+    parser.parse_file.assert_called_once()
+    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], "1.0.0")
+
+
+def test_legacy_null_parser_version_reprocesses() -> None:
+    """Verify that if the legacy db row has a NULL parser_version, skipping is disabled and file is reprocessed."""
+    from pathlib import Path
+    from parsing.identifiers import IdentifierGenerator
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    # Previous state has same content_hash but parser_version is None (legacy null row)
+    import hashlib
+
+    content_hash = hashlib.sha256(b"x = 1").hexdigest()
+    expected_file_id = IdentifierGenerator.generate_file_id("test_repo", Path("foo.py"))
+
+    state = Mock()
+    state.get.return_value = FileState(expected_file_id, content_hash, [], [], None)
+
+    # Mock parser
+    meta = FileMetadata(
+        expected_file_id, "test_repo", "foo.py", content_hash, 5, 1, 0, 0, 0, 0, 0, 1, ParseStatus.SUCCESS
+    )
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id=expected_file_id,
+        content_hash=content_hash,
+        nodes=[],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+    parser.parse_file.assert_called_once()
+    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], "1.0.0")

@@ -17,8 +17,11 @@ class KafkaEventProducer(EventPublisherPort):
         self._producer = producer_instance
         self._initialized = producer_instance is not None
         self._errors: list[str] = []
+        self._failed = False
 
     def _init_producer(self) -> None:
+        if self._failed:
+            raise PublishError("Producer is in a failed state and cannot be reused")
         if self._initialized:
             return
         try:
@@ -34,6 +37,7 @@ class KafkaEventProducer(EventPublisherPort):
             self._producer = Producer(conf)
             self._initialized = True
         except Exception as exc:
+            self._failed = True
             raise PublishError(f"Failed to initialize Kafka producer: {exc}") from exc
 
     def _delivery_report(self, err: Any, msg: Any) -> None:
@@ -47,6 +51,8 @@ class KafkaEventProducer(EventPublisherPort):
 
     def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
         """Queue event payload to Kafka with partitioning key."""
+        if self._failed:
+            raise PublishError("Producer is in a failed state and cannot be reused")
         self._init_producer()
         try:
             # Serialize event to JSON UTF-8
@@ -63,29 +69,32 @@ class KafkaEventProducer(EventPublisherPort):
             # Serve delivery callbacks periodically
             self._producer.poll(0)
         except Exception as exc:
+            self._failed = True
             raise PublishError(f"Failed to queue message to Kafka topic {topic}: {exc}") from exc
-
-    def clear_errors(self) -> None:
-        """Resets the internal delivery error list."""
-        self._errors.clear()
 
     def flush(self) -> None:
         """Blocks until all outstanding messages in the queue are sent and checks for errors."""
-        if self._initialized and self._producer:
-            try:
-                # Blocks until all messages in the queue are delivered/failed
-                undelivered = self._producer.flush(timeout=10.0)
-                if undelivered > 0:
-                    self._errors.clear()
-                    raise PublishError(f"Flush timeout: {undelivered} messages remained undelivered after timeout")
-
-                # Check if any messages in the batch encountered errors in delivery callback
-                if self._errors:
-                    errs_summary = "; ".join(self._errors)
-                    self._errors.clear()
-                    raise PublishError(f"Delivery failures during event streaming: {errs_summary}")
-            except PublishError:
-                raise
-            except Exception as exc:
+        if self._failed:
+            raise PublishError("Producer is in a failed state and cannot be reused")
+        if not self._initialized or not self._producer:
+            return
+        try:
+            # Blocks until all messages in the queue are delivered/failed
+            undelivered = self._producer.flush(timeout=10.0)
+            if undelivered > 0:
+                self._failed = True
                 self._errors.clear()
-                raise PublishError(f"Failed to flush Kafka producer: {exc}") from exc
+                raise PublishError(f"Flush timeout: {undelivered} messages remained undelivered after timeout")
+
+            # Check if any messages in the batch encountered errors in delivery callback
+            if self._errors:
+                self._failed = True
+                errs_summary = "; ".join(self._errors)
+                self._errors.clear()
+                raise PublishError(f"Delivery failures during event streaming: {errs_summary}")
+        except PublishError:
+            raise
+        except Exception as exc:
+            self._failed = True
+            self._errors.clear()
+            raise PublishError(f"Failed to flush Kafka producer: {exc}") from exc

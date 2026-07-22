@@ -56,10 +56,6 @@ class ProcessFileService:
         """Parses a single file, publishes events to target destination, and commits SQLite state."""
         relative_path = Path(source_file.relative_path)
 
-        # Reset any stale producer errors before processing the batch
-        if hasattr(self.writer, "clear_errors"):
-            self.writer.clear_errors()
-
         # 1. Read raw source bytes strict
         try:
             source_bytes = self.repo_adapter.read_file(relative_path)
@@ -74,8 +70,8 @@ class ProcessFileService:
         # 3. Load previous state
         prev_state = self.state_store.get(file_id)
 
-        # 4. Check if unchanged
-        if prev_state and prev_state.content_hash == content_hash:
+        # 4. Check if unchanged (both content_hash and parser_version must match)
+        if prev_state and prev_state.content_hash == content_hash and prev_state.parser_version == "1.0.0":
             return ProcessingResult(
                 status=ParseStatus.SKIPPED_UNCHANGED,
                 file_id=file_id,
@@ -187,7 +183,7 @@ class ProcessFileService:
         # 8. Commit to SQLite State DB only after successful delivery ack
         node_ids = [n.node_id for n in current_graph.nodes]
         edge_ids = [e.edge_id for e in current_graph.edges]
-        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids)
+        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids, "1.0.0")
 
         return ProcessingResult(
             status=ParseStatus.SUCCESS,

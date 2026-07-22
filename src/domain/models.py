@@ -85,6 +85,7 @@ class FileState:
     content_hash: str
     node_ids: list[str]
     edge_ids: list[str]
+    parser_version: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
