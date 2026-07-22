@@ -153,12 +153,14 @@ Mỗi event được bọc trong một Envelope chung chứa metadata về phiê
 ---
 
 ## 8. Topic Layout
-Hệ thống thiết kế 5 topics Kafka rạch ròi:
-- `cpg.nodes`: Chứa các node graph.
-- `cpg.edges`: Chứa các edge graph.
-- `source.metadata`: Chứa metadata thống kê của file.
-- `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại.
-- `connector.errors`: Kafka Connect Dead Letter Queue chứa các bản ghi lỗi từ downstream connector (dự kiến ở Task 4).
+Hệ thống cấu hình 5 topics Kafka rạch ròi:
+- **Required Task 3 topics**:
+  - `cpg.nodes`: Chứa các node graph.
+  - `cpg.edges`: Chứa các edge graph.
+  - `source.metadata`: Chứa metadata thống kê của file.
+  - `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại.
+- **Planned Kafka Connect DLQ topic**:
+  - `connector.errors`: Kafka Connect Dead Letter Queue chứa các bản ghi lỗi từ downstream connector (dự kiến ở Task 4, chưa được kiểm chứng runtime trong Task 3).
 
 ### 8.1 Kafka Ordering Semantics (Cơ chế đảm bảo thứ tự của Kafka)
 Để đảm bảo thiết kế downstream và xử lý luồng dữ liệu chính xác, các quy tắc thứ tự sự kiện (ordering semantics) được quy định rõ như sau:
@@ -273,7 +275,7 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
 ### Quyết định 3: Thiết lập Stable ID deterministic bằng SHA-256
 - **Bối cảnh**: Khi re-run parser hoặc re-play file chỉnh sửa, Neo4j và MongoDB cần cập nhật đúng bản ghi thay vì tạo mới trùng lặp.
 - **Giải pháp**: Không dùng UUID ngẫu nhiên. Mọi node, edge và file được gán định danh bằng cách băm SHA-256 các thuộc tính cố định.
-- **Hệ quả**: Đảm bảo tính idempotent 100% khi ghi dữ liệu.
+- **Hệ quả**: Đảm bảo tính idempotency khi ghi dữ liệu.
 
 ### Quyết định 4: Bố cục Topic Kafka rạch ròi
 - **Bối cảnh**: Pipeline cần truyền nhiều loại sự kiện (nodes, edges, metadata, errors). Việc gộp chung làm tăng tải lọc tin nhắn cho consumers.

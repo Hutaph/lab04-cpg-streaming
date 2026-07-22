@@ -67,4 +67,4 @@ PYTHONPATH=src uv run pytest tests/integration -v
 - **[AGENTS.md](AGENTS.md)**: Hướng dẫn cấu trúc, ngôn ngữ và các quy tắc bắt buộc cho AI Coding Agents.
 - **[docs/system_architecture.md](docs/system_architecture.md)**: Tài liệu đặc tả kỹ thuật chi tiết nhất (Kiến trúc hệ thống, Stable ID, cấu trúc thư mục, quy tắc dependency, và 7 quyết định thiết kế).
 - **[docs/implementation_plan.md](docs/implementation_plan.md)**: Kế hoạch triển khai chi tiết 15 phases, ma trận truy vết yêu cầu, chiến lược kiểm thử và hướng dẫn nộp bài.
-- **[lab04-book/](lab04-book/)**: Mã nguồn của báo cáo Jupyter Book chính thức (chứa kết quả chạy thực nghiệm Task 1 & Task 2).
+- **[lab04-book/](lab04-book/)**: Mã nguồn của báo cáo Jupyter Book chính thức (chứa kết quả chạy thực nghiệm Task 1, Task 2 & Task 3).

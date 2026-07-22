@@ -138,9 +138,9 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **Call edges** | Trích xuất cuộc gọi hàm kết nối tới CallTarget | [call_builder.py](../src/parsing/call_builder.py) | Nút CallTarget và cạnh CALLS nối từ nút gọi hàm | **Verified locally** |
 | **Bounded memory** | Parse tuần tự từng file, giải phóng bộ nhớ ngay sau đó | [process_file.py](../src/application/services/process_file.py) | Log giám sát dung lượng RAM tiêu thụ cố định khi chạy | **Verified locally** |
 | **Stable IDs** | Hàm hash sha256 sinh ID ổn định từ thuộc tính cố định | [identifiers.py](../src/parsing/identifiers.py) | Unit test chứng minh ID không đổi qua các lần chạy | **Verified locally** |
-| **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Scaffolded** |
-| **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Scaffolded** |
-| **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Scaffolded** |
+| **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Verified** |
+| **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Verified** |
+| **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Verified** |
 | **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Scaffolded** |
 | **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Scaffolded** |
 | **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py` | Log Spark hiển thị luồng dữ liệu liên tục | **Scaffolded** |
