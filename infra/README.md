@@ -22,6 +22,6 @@ Các topic được tạo bao gồm:
 - `cpg.nodes`: Chứa các sự kiện trích xuất nodes (3 partitions).
 - `cpg.edges`: Chứa các sự kiện trích xuất edges (3 partitions).
 - `source.metadata`: Chứa metadata thông tin và thống kê của file (1 partition).
-- `parser.errors`: Dead Letter Queue cho các lỗi cú pháp khi parse (1 partition).
-- `connector.errors`: Dead Letter Queue chứa các sự kiện lỗi từ Kafka Connect (1 partition).
+- `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại (1 partition).
+- `connector.errors`: Dead Letter Queue chứa các sự kiện lỗi từ Kafka Connect (được cấu hình ở Task 4) (1 partition).
 

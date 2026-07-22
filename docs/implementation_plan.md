@@ -45,6 +45,10 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 - **Mục tiêu**: Thiết lập Kafka Broker ở local và viết Adapter đẩy event trực tiếp từ Parser Service vào Kafka.
 - **Output**: Sự kiện được gửi thành công vào các topic Kafka tương ứng.
 - **Trạng thái**: **Hoàn thành (Verified)**.
+- **Yêu cầu & Xác minh (Requirements & Verification)**:
+  - Các lỗi phân tích cú pháp (Parser errors) được publish chủ động sang topic `parser.errors`.
+  - Schema và routing của topic `parser.errors` được xác minh thông qua script kiểm tra và notebook.
+  - Không thực hiện xác minh Kafka Connect DLQ trong Task 3 (chỉ kiểm thử luồng lỗi parser nghiệp vụ).
 
 ### Phase 8 — Neo4j Kafka Sink
 - **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
@@ -54,7 +58,10 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
   - **Kháng xáo trộn thứ tự Node-Edge**: Edge ingestion phải chấp nhận và xử lý được trường hợp các node đầu/cuối của cạnh chưa tồn tại trong Neo4j (ví dụ: tạo placeholder node và bổ sung thuộc tính sau).
   - **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải chạy idempotent (không báo lỗi khi đối tượng cần xóa chưa tồn tại hoặc đã bị xóa trước đó).
   - **Tránh xung đột do Replay**: Sự kiện trùng lặp do retry hoặc replay từ Kafka Connect phải không gây bất nhất hay trùng lặp phần tử đồ thị trong Neo4j.
-  - **Quản lý Lỗi kết nối**: Mọi bản ghi lỗi khi ghi vào Neo4j Connect Sink phải được tự động định tuyến sang topic `connector.errors` (DLQ).
+  - **Cấu hình Kafka Connect DLQ**: Cấu hình Kafka Connect DLQ định tuyến sang topic `connector.errors` cho các lỗi ghi Neo4j Sink.
+  - **Dung sai lỗi Connector**: Kích hoạt cơ chế connector error tolerance phù hợp với đặc tả yêu cầu của Đồ án.
+  - **Bảo toàn bản ghi gốc**: Đảm bảo DLQ bảo toàn bản ghi gốc bị lỗi và đính kèm ngữ cảnh lỗi/headers hữu ích nếu được hỗ trợ.
+  - **Kiểm chứng DLQ thực tế**: Minh họa bằng chứng thực tế về một lỗi ghi connector rơi vào topic `connector.errors` thay vì gửi tin nhắn test giả tạo trực tiếp lên DLQ.
   - **Kiểm thử Ingestion**: Bộ test kiểm nghiệm Task 4 bắt buộc phải bao gồm kịch bản kiểm tra hành vi xử lý cạnh đến trước node (edge-before-node handling).
 
 ### Phase 9 — Spark Structured Streaming

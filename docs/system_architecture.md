@@ -55,18 +55,21 @@ graph TD
         CpgParser --> StateStore[("SQLite State Store")]
     end
     
-    CpgParser -->|"Publish"| KafkaBroker{"Apache Kafka Broker"}
+    CpgParser -->|"Publish graph events"| KafkaBroker{"Apache Kafka Broker"}
+    CpgParser -->|"Publish parser errors"| TopicErrors["parser.errors (Parser Error Topic)"]
     
     subgraph Kafka Topics
         KafkaBroker --> TopicNodes["cpg.nodes"]
         KafkaBroker --> TopicEdges["cpg.edges"]
         KafkaBroker --> TopicMetadata["source.metadata"]
-        KafkaBroker --> TopicErrors["parser.errors"]
+        TopicErrors
+        TopicConnectorErrors["connector.errors (Kafka Connect DLQ - Planned)"]
     end
     
     TopicNodes --> Neo4jSink["Neo4j Kafka Sink Connector"]
     TopicEdges --> Neo4jSink
     Neo4jSink -->|"MERGE Cypher"| Neo4jDb[("Neo4j Graph Database")]
+    Neo4jSink -.->|"Error Routing (Task 4)"| TopicConnectorErrors
     
     TopicMetadata --> SparkStreaming["Spark Structured Streaming"]
     SparkStreaming -->|"MongoDB Spark Connector"| MongoDb[("MongoDB Document Database")]
@@ -154,8 +157,8 @@ Hệ thống thiết kế 5 topics Kafka rạch ròi:
 - `cpg.nodes`: Chứa các node graph.
 - `cpg.edges`: Chứa các edge graph.
 - `source.metadata`: Chứa metadata thống kê của file.
-- `parser.errors`: Dead letter queue cho lỗi parse cú pháp.
-- `connector.errors`: Nơi lưu trữ các bản ghi lỗi khi ghi vào Neo4j Connect Sink (Dead Letter Queue).
+- `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại.
+- `connector.errors`: Kafka Connect Dead Letter Queue chứa các bản ghi lỗi từ downstream connector (dự kiến ở Task 4).
 
 ### 8.1 Kafka Ordering Semantics (Cơ chế đảm bảo thứ tự của Kafka)
 Để đảm bảo thiết kế downstream và xử lý luồng dữ liệu chính xác, các quy tắc thứ tự sự kiện (ordering semantics) được quy định rõ như sau:
@@ -167,6 +170,21 @@ Hệ thống thiết kế 5 topics Kafka rạch ròi:
   - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
 - **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
 - **Idempotency**: Stable deterministic IDs của node và edge hỗ trợ chống trùng lặp ghi (idempotent write) ở downstream, nhưng không giúp giải quyết vấn đề thứ tự phân phối tin nhắn xuyên topic.
+
+### 8.2 Error Topic Semantics (Cơ chế và phân loại lỗi hệ thống)
+Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độc lập:
+1. **parser.errors (Parser Business Error Topic)**:
+   - **Bản chất**: Topic sự kiện nghiệp vụ thuộc sở hữu trực tiếp của Parser Service.
+   - **Producer**: Parser Service chủ động publish khi phát hiện lỗi xử lý source file (ví dụ: `SyntaxError`, mã hóa không được hỗ trợ).
+   - **Event Type**: `PARSER_ERROR` tuân thủ nghiêm ngặt error-event schema.
+   - **Hệ quả**: Khi phát hành lỗi, thành quả phân tích graph của file đó bị hủy bỏ, SQLite state store không được commit hash mới.
+   - **Lưu ý**: Đây **không** phải là Dead Letter Queue (DLQ). Lỗi cấu trúc sự kiện (schema validation failure) khi sinh payload sẽ dừng pipeline ngay lập tức và không được route vào topic này để tránh vòng lặp lỗi vô tận.
+
+2. **connector.errors (Kafka Connect Dead Letter Queue)**:
+   - **Bản chất**: Kafka Connect Dead Letter Queue (DLQ) dự kiến phục vụ cho hạ tầng Kafka Connect ở Task 4.
+   - **Producer**: Kafka Connect framework hoặc Neo4j Sink Connector tự động định tuyến.
+   - **Mục đích**: Chứa các records thô ban đầu mà connector không thể xử lý (ví dụ: lỗi kết nối database, lỗi cú pháp truy vấn Cypher).
+   - **Lưu ý**: Hoàn toàn tách biệt khỏi luồng lỗi nghiệp vụ của Parser Service. Topic này sẽ được cấu hình và kiểm thử thực tế ở Task 4.
 
 ---
 

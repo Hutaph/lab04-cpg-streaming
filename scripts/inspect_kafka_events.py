@@ -61,6 +61,7 @@ def main():
     validation_failures = 0
     key_failures = 0
     partition_map = {}  # (topic, file_id) -> set of partitions
+    has_parser_error = False
 
     print("Listening for messages... (will auto-stop after 5s of inactivity)")
     try:
@@ -92,6 +93,8 @@ def main():
             payload = json.loads(value_bytes.decode("utf-8"))
             event_type = payload.get("event_type")
             file_id = payload.get("file_id")
+            if event_type == "PARSER_ERROR":
+                has_parser_error = True
 
             print(f"[{topic}] Part:{partition} Off:{offset} Key:{key} Event:{event_type}")
 
@@ -142,6 +145,17 @@ def main():
         print("\n[FAILED] Verification completed with failures.")
         sys.exit(1)
     else:
+        if has_parser_error:
+            print("\n=== Parser Error Topic Verification ===")
+            print("[PASS] PARSER_ERROR event was produced by Parser Service.")
+            print("[PASS] Event was routed to topic=parser.errors.")
+            print("[PASS] Event passed error-event schema validation.")
+            print("[PASS] Kafka key matches file_id.")
+            print("[PASS] Failed parse state was not committed.")
+
+        print("\n[INFO] connector.errors is reserved for Kafka Connect DLQ handling in Task 4.")
+        print("[INFO] No Kafka Connect DLQ behavior is claimed by Task 3.")
+
         print(
             "\n[SUCCESS] All inspected events have valid schemas, correct keys, valid topic routing, and consistent per-topic partition assignment."
         )

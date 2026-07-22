@@ -238,7 +238,7 @@ class ProcessFileService:
         except SchemaValidationError:
             pass  # Avoid infinite error loop, push raw
 
-        # Push to dead-letter error queue
+        # Publish error event to parser error topic
         try:
             self._write(self.topic_errors, file_id, evt_dict)
             self.writer.flush()
