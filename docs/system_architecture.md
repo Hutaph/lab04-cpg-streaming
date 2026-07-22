@@ -157,6 +157,17 @@ Hệ thống thiết kế 5 topics Kafka rạch ròi:
 - `parser.errors`: Dead letter queue cho lỗi parse cú pháp.
 - `connector.errors`: Nơi lưu trữ các bản ghi lỗi khi ghi vào Neo4j Connect Sink (Dead Letter Queue).
 
+### 8.1 Kafka Ordering Semantics (Cơ chế đảm bảo thứ tự của Kafka)
+Để đảm bảo thiết kế downstream và xử lý luồng dữ liệu chính xác, các quy tắc thứ tự sự kiện (ordering semantics) được quy định rõ như sau:
+- **Khóa phân vùng (`file_id`)**: `file_id` được sử dụng làm partition key cho các topic. Mọi event có cùng `file_id` trong cùng một topic sẽ luôn được định tuyến nhất quán vào cùng một partition.
+- **Thứ tự theo từng Topic (Per-Topic Partition Ordering)**: Kafka chỉ bảo đảm thứ tự sự kiện (offset ordering) trong phạm vi **một topic partition duy nhất**. Ví dụ, thứ tự các node event của cùng một file được bảo toàn trong partition của `cpg.nodes`.
+- **Không bảo đảm thứ tự xuyên Topic (No Cross-Topic Ordering Guarantee)**: Do `cpg.nodes`, `cpg.edges` và `source.metadata` là các topic độc lập, Kafka **không bảo đảm bất kỳ thứ tự phân phối nào giữa các topic**.
+  - Không thể giả định rằng node event luôn được consume trước edge event hoặc ngược lại.
+  - Topic offsets của các topic khác nhau là cục bộ và không thể so sánh hay đối chiếu để suy luận thứ tự.
+  - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
+- **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
+- **Idempotency**: Stable deterministic IDs của node và edge hỗ trợ chống trùng lặp ghi (idempotent write) ở downstream, nhưng không giúp giải quyết vấn đề thứ tự phân phối tin nhắn xuyên topic.
+
 ---
 
 ## 9. Stable Identifier (Định danh ổn định)

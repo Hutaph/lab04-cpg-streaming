@@ -15,7 +15,7 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 ### 2. Danh sách các Chương báo cáo (Chapters)
 - **[Task 1: Clone và khám phá repository](task1_clone_explore.ipynb)**: Thực hiện shallow clone, xác định git commit hash và khảo sát cấu trúc thư mục, thống kê danh sách file Python nguồn.
 - **[Task 2: Parser Service CPG](task2_parser_service.ipynb)**: Triển khai CPG Parser phân tích cú pháp AST, CFG, DFG, Call graph, sinh stable ID ổn định và chạy thử nghiệm dry-run xuất file JSONL.
-- **[Task 3: Tích hợp Kafka Event Streaming](task3_kafka_topics.ipynb)**: Cấu hình single-node broker, khởi tạo các topic, tích hợp live-mode publish events lên Kafka với key là `file_id` và xác minh tính toàn vẹn (schema validation & partition ordering).
+- **[Task 3: Tích hợp Kafka Event Streaming](task3_kafka_topics.ipynb)**: Cấu hình single-node broker, khởi tạo các topic, tích hợp live-mode publish events lên Kafka với key là `file_id` và xác minh tính toàn vẹn (schema validation & per-topic partition consistency).
 
 ---
 

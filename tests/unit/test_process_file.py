@@ -85,3 +85,72 @@ def test_writer_failure_does_not_commit() -> None:
 
     # State store commit must NOT have been called
     state.commit.assert_not_called()
+
+
+def test_process_file_publishes_events_in_logical_order() -> None:
+    """Verify that the process file service invokes the publisher/writer in the correct logical order."""
+    from typing import Any
+    from domain.models import CodeNode, CodeEdge
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    # Set up previous state containing nodes and edges to trigger removals
+    state = Mock()
+    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"])
+
+    # Mock parser
+    meta = FileMetadata("file_id", "test_repo", "foo.py", "new_hash", 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS)
+    new_node = CodeNode("new_node_id", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+    new_edge = CodeEdge("new_edge_id", "file_id", "new_node_id", "new_node_id", "AST_CHILD")
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="new_hash",
+        nodes=[new_node],
+        edges=[new_edge],
+        metadata=meta,
+    )
+
+    validator = Mock()
+
+    # We want to record the order of write_event/publish_event calls
+    call_sequence = []
+
+    class RecordingWriter:
+        def write_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            call_sequence.append((topic, event["event_type"]))
+
+        def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            call_sequence.append((topic, event["event_type"]))
+
+        def flush(self) -> None:
+            pass
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=RecordingWriter(),
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    service.execute(sf)
+
+    # The expected logical sequence of events sent to the publisher is:
+    # 1. EDGE_DELETE (sent to cpg.edges)
+    # 2. NODE_DELETE (sent to cpg.nodes)
+    # 3. NODE_UPSERT (sent to cpg.nodes)
+    # 4. EDGE_UPSERT (sent to cpg.edges)
+    # 5. FILE_METADATA_UPSERT (sent to source.metadata)
+    expected = [
+        ("cpg.edges", "EDGE_DELETE"),
+        ("cpg.nodes", "NODE_DELETE"),
+        ("cpg.nodes", "NODE_UPSERT"),
+        ("cpg.edges", "EDGE_UPSERT"),
+        ("source.metadata", "FILE_METADATA_UPSERT"),
+    ]
+    assert call_sequence == expected

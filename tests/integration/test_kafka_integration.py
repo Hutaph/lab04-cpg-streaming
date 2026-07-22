@@ -167,3 +167,231 @@ def test_kafka_producer_delivery_failure_retains_state(tmp_path):
 
     # Verify that the SQLite state store has NOT committed the file state
     assert state_store.get(file_id) is None, "State should not have been committed"
+
+
+@pytest.mark.kafka
+def test_kafka_topic_routing_and_keys():
+    """Verify that events of different types are correctly routed to their respective topics and use the file_id as the message key."""
+    bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    producer = KafkaEventProducer(bootstrap_servers=bootstrap_servers)
+
+    test_file_id = "test_routing_file_id"
+
+    events = [
+        (
+            "cpg.nodes",
+            "NODE_UPSERT",
+            {
+                "file_id": test_file_id,
+                "event_type": "NODE_UPSERT",
+                "event_id": "n_up",
+                "schema_version": "1.0",
+                "event_time": "2026-07-21T12:00:00Z",
+                "repository_id": "repo",
+                "commit_sha": "sha",
+                "file_path": "a.py",
+                "content_hash": "h",
+                "parser_version": "1.0",
+                "node": {
+                    "node_id": "n1",
+                    "node_type": "Module",
+                    "name": "M",
+                    "qualified_name": "M",
+                    "ast_path": "M",
+                    "line_start": None,
+                    "column_start": None,
+                    "line_end": None,
+                    "column_end": None,
+                    "properties": {},
+                },
+            },
+        ),
+        (
+            "cpg.edges",
+            "EDGE_UPSERT",
+            {
+                "file_id": test_file_id,
+                "event_type": "EDGE_UPSERT",
+                "event_id": "e_up",
+                "schema_version": "1.0",
+                "event_time": "2026-07-21T12:00:00Z",
+                "repository_id": "repo",
+                "commit_sha": "sha",
+                "file_path": "a.py",
+                "content_hash": "h",
+                "parser_version": "1.0",
+                "edge": {
+                    "edge_id": "e1",
+                    "source_id": "s",
+                    "target_id": "t",
+                    "edge_type": "AST_CHILD",
+                    "properties": {},
+                },
+            },
+        ),
+        (
+            "source.metadata",
+            "FILE_METADATA_UPSERT",
+            {
+                "file_id": test_file_id,
+                "event_type": "FILE_METADATA_UPSERT",
+                "event_id": "m_up",
+                "schema_version": "1.0",
+                "event_time": "2026-07-21T12:00:00Z",
+                "repository_id": "repo",
+                "commit_sha": "sha",
+                "file_path": "a.py",
+                "content_hash": "h",
+                "parser_version": "1.0",
+                "metadata": {
+                    "size_bytes": 10,
+                    "line_count": 2,
+                    "function_count": 0,
+                    "class_count": 0,
+                    "import_count": 0,
+                    "node_count": 0,
+                    "edge_count": 0,
+                    "parse_duration_ms": 1,
+                    "parse_status": "SUCCESS",
+                    "parser": "python.ast",
+                },
+            },
+        ),
+        (
+            "parser.errors",
+            "PARSER_ERROR",
+            {
+                "file_id": test_file_id,
+                "event_type": "PARSER_ERROR",
+                "event_id": "err",
+                "schema_version": "1.0",
+                "event_time": "2026-07-21T12:00:00Z",
+                "repository_id": "repo",
+                "commit_sha": "sha",
+                "file_path": "a.py",
+                "content_hash": "h",
+                "parser_version": "1.0",
+                "error": {"error_type": "SyntaxError", "message": "error msg", "retryable": False},
+            },
+        ),
+    ]
+
+    for topic, _, payload in events:
+        producer.publish_event(topic, test_file_id, payload)
+    producer.flush()
+
+    conf = {
+        "bootstrap.servers": bootstrap_servers,
+        "group.id": "test-kafka-routing-verifier-group",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": "false",
+    }
+
+    consumer = Consumer(conf)
+    all_topics = ["cpg.nodes", "cpg.edges", "source.metadata", "parser.errors"]
+    consumer.subscribe(all_topics)
+
+    received_events = {}
+
+    empty_polls = 0
+    while empty_polls < 5 and len(received_events) < len(events):
+        msg = consumer.poll(1.0)
+        if msg is None:
+            empty_polls += 1
+            continue
+        if msg.error():
+            continue
+        empty_polls = 0
+
+        topic = msg.topic()
+        key = msg.key().decode("utf-8")
+        val = json.loads(msg.value().decode("utf-8"))
+
+        if key == test_file_id:
+            received_events[topic] = val
+
+    consumer.close()
+
+    assert len(received_events) == len(events), f"Expected {len(events)} events, got {len(received_events)}"
+    for topic, expected_type, _ in events:
+        assert topic in received_events
+        assert received_events[topic]["event_type"] == expected_type
+
+
+@pytest.mark.kafka
+def test_kafka_per_topic_partition_consistency():
+    """Verify that multiple events with the same file_id on a single topic route to the same partition, and offsets are strictly increasing."""
+    bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    producer = KafkaEventProducer(bootstrap_servers=bootstrap_servers)
+
+    test_file_id = "consistency_test_file_id"
+    test_topic = "cpg.nodes"
+
+    # Send 5 events for the same file ID
+    for i in range(5):
+        payload = {
+            "event_id": f"node_consistency_{i}",
+            "event_type": "NODE_UPSERT",
+            "event_time": "2026-07-21T12:00:00Z",
+            "repository_id": "repo",
+            "commit_sha": "sha",
+            "file_id": test_file_id,
+            "file_path": "a.py",
+            "content_hash": "h",
+            "parser_version": "1.0",
+            "schema_version": "1.0",
+            "node": {
+                "node_id": f"n{i}",
+                "node_type": "Module",
+                "name": "M",
+                "qualified_name": "M",
+                "ast_path": "M",
+                "line_start": None,
+                "column_start": None,
+                "line_end": None,
+                "column_end": None,
+                "properties": {},
+            },
+        }
+        producer.publish_event(test_topic, test_file_id, payload)
+    producer.flush()
+
+    conf = {
+        "bootstrap.servers": bootstrap_servers,
+        "group.id": "test-kafka-consistency-verifier-group",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": "false",
+    }
+
+    consumer = Consumer(conf)
+    consumer.subscribe([test_topic])
+
+    received_messages = []
+    empty_polls = 0
+    while empty_polls < 5 and len(received_messages) < 5:
+        msg = consumer.poll(1.0)
+        if msg is None:
+            empty_polls += 1
+            continue
+        if msg.error():
+            continue
+        empty_polls = 0
+
+        key = msg.key().decode("utf-8")
+        if key == test_file_id:
+            received_messages.append(msg)
+
+    consumer.close()
+
+    assert len(received_messages) == 5
+
+    # Assert partition consistency
+    first_partition = received_messages[0].partition()
+    for msg in received_messages:
+        assert msg.partition() == first_partition, (
+            "All events for the same file_id on this topic must go to the same partition"
+        )
+
+    # Assert offset ordering
+    offsets = [msg.offset() for msg in received_messages]
+    assert offsets == sorted(offsets), "Offsets must be strictly increasing"

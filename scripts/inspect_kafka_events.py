@@ -7,10 +7,10 @@ import sys
 from pathlib import Path
 import yaml
 from confluent_kafka import Consumer, KafkaError
-from jsonschema import validate
+from jsonschema import Draft202012Validator
 
 
-def load_schemas(schemas_dir: Path) -> dict[str, dict]:
+def load_schemas(schemas_dir: Path) -> dict[str, Draft202012Validator]:
     schemas = {}
     mapping = {
         "NODE_UPSERT": "node-event.schema.json",
@@ -23,7 +23,8 @@ def load_schemas(schemas_dir: Path) -> dict[str, dict]:
     for event_type, filename in mapping.items():
         schema_path = schemas_dir / filename
         with open(schema_path, "r", encoding="utf-8") as f:
-            schemas[event_type] = json.load(f)
+            schema_data = json.load(f)
+        schemas[event_type] = Draft202012Validator(schema_data)
     return schemas
 
 
@@ -59,7 +60,7 @@ def main():
     consumed_count = 0
     validation_failures = 0
     key_failures = 0
-    partition_events = {}  # file_id -> set of (topic, partition)
+    partition_map = {}  # (topic, file_id) -> set of partitions
 
     print("Listening for messages... (will auto-stop after 5s of inactivity)")
     try:
@@ -99,14 +100,14 @@ def main():
                 print(f"  [ERROR] Key mismatch! Key: {key}, file_id in payload: {file_id}")
                 key_failures += 1
 
-            # Group events by file_id to verify partition routing
+            # Group events by (topic, file_id) to verify partition routing
             if file_id:
-                partition_events.setdefault(file_id, set()).add((topic, partition))
+                partition_map.setdefault((topic, file_id), set()).add(partition)
 
             # Validate against schema
             if event_type in schemas:
                 try:
-                    validate(instance=payload, schema=schemas[event_type])
+                    schemas[event_type].validate(payload)
                     print("  [OK] Schema validation passed.")
                 except Exception as exc:
                     print(f"  [ERROR] Schema validation failed: {exc}")
@@ -125,25 +126,25 @@ def main():
     print(f"Key mismatches (key != file_id): {key_failures}")
 
     # Partition key validation
-    print("\n=== Partition Key Verification ===")
+    print("\n=== Per-Topic Partition Consistency ===")
     partition_routing_ok = True
-    for fid, routes in partition_events.items():
-        topic_partitions = {}
-        for t, p in routes:
-            topic_partitions.setdefault(t, set()).add(p)
+    for (t, fid), parts in sorted(partition_map.items()):
+        if len(parts) > 1:
+            print(f"[FAIL] topic={t}, file_id={fid[:8]}..., partitions={parts}")
+            partition_routing_ok = False
+        else:
+            print(f"[PASS] topic={t}, file_id={fid[:8]}..., partitions={parts}")
 
-        for t, parts in topic_partitions.items():
-            if len(parts) > 1:
-                print(f"  [ERROR] File ID {fid} routed to multiple partitions in topic {t}: {parts}")
-                partition_routing_ok = False
-            else:
-                print(f"  [OK] File ID {fid[:8]}... routed uniquely to partition {list(parts)[0]} in topic {t}")
+    print("\n[INFO] Partition numbers are topic-local and are not compared across topics.")
+    print("[INFO] This verification does not claim cross-topic ordering.")
 
     if validation_failures > 0 or key_failures > 0 or not partition_routing_ok:
         print("\n[FAILED] Verification completed with failures.")
         sys.exit(1)
     else:
-        print("\n[SUCCESS] All messages valid and correctly routed.")
+        print(
+            "\n[SUCCESS] All inspected events have valid schemas, correct keys, valid topic routing, and consistent per-topic partition assignment."
+        )
         sys.exit(0)
 
 

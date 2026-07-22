@@ -50,6 +50,12 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 - **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
 - **Output**: Đồ thị Neo4j được cập nhật tự động dựa trên Cypher MERGE query.
 - **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Yêu cầu Thiết kế (Design Requirements)**:
+  - **Kháng xáo trộn thứ tự Node-Edge**: Edge ingestion phải chấp nhận và xử lý được trường hợp các node đầu/cuối của cạnh chưa tồn tại trong Neo4j (ví dụ: tạo placeholder node và bổ sung thuộc tính sau).
+  - **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải chạy idempotent (không báo lỗi khi đối tượng cần xóa chưa tồn tại hoặc đã bị xóa trước đó).
+  - **Tránh xung đột do Replay**: Sự kiện trùng lặp do retry hoặc replay từ Kafka Connect phải không gây bất nhất hay trùng lặp phần tử đồ thị trong Neo4j.
+  - **Quản lý Lỗi kết nối**: Mọi bản ghi lỗi khi ghi vào Neo4j Connect Sink phải được tự động định tuyến sang topic `connector.errors` (DLQ).
+  - **Kiểm thử Ingestion**: Bộ test kiểm nghiệm Task 4 bắt buộc phải bao gồm kịch bản kiểm tra hành vi xử lý cạnh đến trước node (edge-before-node handling).
 
 ### Phase 9 — Spark Structured Streaming
 - **Mục tiêu**: Viết ứng dụng Spark Structured Streaming đọc metadata event từ Kafka.
