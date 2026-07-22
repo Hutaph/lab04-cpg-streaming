@@ -180,10 +180,9 @@ Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nh�
   Các thư mục verification tạm cần được loại khỏi source-oriented workspace view hoặc được cleanup để tránh bị hiểu nhầm là project artifacts.
 
 ### 5.2. Trạng thái Task 3
-Task 3 không còn thay đổi bắt buộc trong phạm vi hiện tại của Lab. Kafka broker, topic provisioning, event validation, publishing, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
-Một số edge cases bổ sung của producer hoặc verifier có thể được kiểm thử trước khi nộp bài, nhưng không phải blocker để bắt đầu Task 4.
-Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Tầng ứng dụng sử dụng cơ chế publish-before-state-commit để tránh ghi nhận trạng thái thành công khi việc publish lên Kafka gặp sự cố. Tuy nhiên, cơ chế này không tạo ra exactly-once end-to-end.
-Task 3 notebook không được execute lại vì phiên này chỉ chỉnh sửa các Markdown cells. Các cached runtime outputs từ lần kiểm chứng trước được giữ nguyên và không bị thay đổi.
+Task 3 đã hoàn thành các bước rà soát biên an toàn và kiểm chứng. Kafka broker, topic provisioning, event validation, full-batch pre-serialization, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
+Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai idempotent database writes; duplicate handling chưa được kiểm chứng trong Task 3.
+Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của cả ba Phase trong cùng một lần chạy.
 
 ### 5.3. Optional Future Considerations
 - **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.

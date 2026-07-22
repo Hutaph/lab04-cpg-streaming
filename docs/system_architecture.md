@@ -171,7 +171,8 @@ Hệ thống cấu hình 5 topics Kafka rạch ròi:
   - Topic offsets của các topic khác nhau là cục bộ và không thể so sánh hay đối chiếu để suy luận thứ tự.
   - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
 - **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
-- **Idempotency**: Stable deterministic IDs của node và edge hỗ trợ chống trùng lặp ghi (idempotent write) ở downstream, nhưng không giúp giải quyết vấn đề thứ tự phân phối tin nhắn xuyên topic.
+- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai idempotent database writes; duplicate handling chưa được kiểm chứng trong Task 3.
+- **Tính nhất quán chéo hệ thống**: Task 3 không cung cấp consistency toàn hệ thống. Order-tolerant ingestion, idempotent mutations và stale-event protection phải được triển khai và kiểm chứng ở Task 4.
 
 ### 8.2 Error Topic Semantics (Cơ chế và phân loại lỗi hệ thống)
 Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độc lập:

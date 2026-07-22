@@ -6,6 +6,7 @@ from application.services.process_file import ProcessFileService
 from domain.models import SourceFile, FileState, ParsedFileGraph, FileMetadata
 from domain.enums import ParseStatus
 from domain.errors import PublishError
+from domain.constants import PARSER_VERSION
 
 
 def test_unchanged_skip_flow() -> None:
@@ -14,14 +15,14 @@ def test_unchanged_skip_flow() -> None:
     repo.read_file.return_value = b"x = 1"
 
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_abc", [], [], "1.0.0")
+    state.get.return_value = FileState("file_id", "hash_abc", [], [], PARSER_VERSION)
 
     # The computed hash of b"x = 1" is "a053...". We force mocking to return equal hash
     # Or we can let it calculate naturally
     import hashlib
 
     content_hash = hashlib.sha256(b"x = 1").hexdigest()
-    state.get.return_value = FileState("file_id", content_hash, [], [], "1.0.0")
+    state.get.return_value = FileState("file_id", content_hash, [], [], PARSER_VERSION)
 
     parser = Mock()
     validator = Mock()
@@ -102,7 +103,8 @@ def test_process_file_publishes_events_in_logical_order() -> None:
 
     # Set up previous state containing nodes and edges to trigger removals
     state = Mock()
-    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"], "1.0.0")
+    # Existing DB has nodes and edges to be deleted
+    state.get.return_value = FileState("file_id", "old_hash", ["old_node_id"], ["old_edge_id"], PARSER_VERSION)
 
     # Mock parser
     meta = FileMetadata("file_id", "test_repo", "foo.py", "new_hash", 5, 1, 0, 0, 0, 1, 1, 1, ParseStatus.SUCCESS)
@@ -445,7 +447,7 @@ def test_previous_state_preserved_on_publish_failure() -> None:
 
     # Previous state contains state A
     state = Mock()
-    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"], "1.0.0")
+    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"], PARSER_VERSION)
 
     # Mock parser output for version B
     meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_version_B", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
@@ -604,7 +606,7 @@ def test_parser_version_change_reprocesses_unchanged_source() -> None:
     # Status should be SUCCESS (reprocessed), not SKIPPED_UNCHANGED
     assert res.status == ParseStatus.SUCCESS
     parser.parse_file.assert_called_once()
-    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], "1.0.0")
+    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION)
 
 
 def test_legacy_null_parser_version_reprocesses() -> None:
@@ -654,4 +656,4 @@ def test_legacy_null_parser_version_reprocesses() -> None:
 
     assert res.status == ParseStatus.SUCCESS
     parser.parse_file.assert_called_once()
-    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], "1.0.0")
+    state.commit.assert_called_once_with(expected_file_id, "foo.py", content_hash, [], [], PARSER_VERSION)

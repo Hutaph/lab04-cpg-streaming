@@ -15,6 +15,7 @@ from domain.models import SourceFile, ProcessingResult
 from domain.enums import ParseStatus, EventType
 from domain.events import EventFactory, EventEnvelope
 from domain.errors import ParsingError, PublishError
+from domain.constants import PARSER_VERSION
 from parsing.identifiers import IdentifierGenerator
 from parsing.diff import CpgDiffer
 
@@ -71,7 +72,7 @@ class ProcessFileService:
         prev_state = self.state_store.get(file_id)
 
         # 4. Check if unchanged (both content_hash and parser_version must match)
-        if prev_state and prev_state.content_hash == content_hash and prev_state.parser_version == "1.0.0":
+        if prev_state and prev_state.content_hash == content_hash and prev_state.parser_version == PARSER_VERSION:
             return ProcessingResult(
                 status=ParseStatus.SKIPPED_UNCHANGED,
                 file_id=file_id,
@@ -98,7 +99,7 @@ class ProcessFileService:
             file_id=file_id,
             file_path=str(relative_path),
             content_hash=content_hash,
-            parser_version="1.0.0",
+            parser_version=PARSER_VERSION,
             schema_version="1.0",
         )
 
@@ -183,7 +184,7 @@ class ProcessFileService:
         # 8. Commit to SQLite State DB only after successful delivery ack
         node_ids = [n.node_id for n in current_graph.nodes]
         edge_ids = [e.edge_id for e in current_graph.edges]
-        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids, "1.0.0")
+        self.state_store.commit(file_id, str(relative_path), content_hash, node_ids, edge_ids, PARSER_VERSION)
 
         return ProcessingResult(
             status=ParseStatus.SUCCESS,
@@ -212,7 +213,7 @@ class ProcessFileService:
             file_id=file_id,
             file_path=str(relative_path),
             content_hash=content_hash,
-            parser_version="1.0.0",
+            parser_version=PARSER_VERSION,
             schema_version="1.0",
         )
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

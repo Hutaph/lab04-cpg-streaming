@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 import pytest
 from infrastructure.messaging.kafka_producer import KafkaEventProducer
-from domain.errors import PublishError
+from domain.errors import PublishError, EventSerializationError
 
 
 def test_producer_publish_and_flush_success() -> None:
@@ -27,10 +27,11 @@ def test_producer_buffer_error_handling() -> None:
 
     producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
 
+    producer.publish_event("test-topic", "test-key", {"foo": "bar"})
     with pytest.raises(PublishError) as exc_info:
-        producer.publish_event("test-topic", "test-key", {"foo": "bar"})
+        producer.flush()
 
-    assert "Failed to queue message" in str(exc_info.value)
+    assert "Failed to queue messages to Kafka" in str(exc_info.value)
     # The producer should be poisoned
     with pytest.raises(PublishError) as exc_info2:
         producer.publish_event("test-topic", "test-key2", {"foo": "baz"})
@@ -101,13 +102,14 @@ def test_mid_batch_buffer_error_poison_producer() -> None:
     mock_raw_producer = Mock()
     producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
 
-    # First event enqueued successfully
+    # First and second events buffered
     producer.publish_event("test-topic", "key1", {"x": 1})
+    producer.publish_event("test-topic", "key2", {"x": 2})
 
-    # Second event triggers BufferError
-    mock_raw_producer.produce.side_effect = BufferError("Queue full")
+    # When flush is called, first succeeds, second triggers BufferError
+    mock_raw_producer.produce.side_effect = [None, BufferError("Queue full")]
     with pytest.raises(PublishError):
-        producer.publish_event("test-topic", "key2", {"x": 2})
+        producer.flush()
 
     # Subsequent event cannot even call produce because producer is poisoned
     mock_raw_producer.produce.side_effect = None
@@ -162,3 +164,91 @@ def test_successful_flush_allows_next_batch() -> None:
     # Batch B (allowed)
     producer.publish_event("test-topic", "key2", {"x": 2})
     producer.flush()
+
+
+# --- New Serialization Boundary Unit Tests ---
+
+
+def test_batch_is_fully_serialized_before_first_produce() -> None:
+    """Verify that all events are serialized before calling first confluent_kafka produce."""
+    mock_raw_producer = Mock()
+    mock_raw_producer.flush.return_value = 0
+    producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
+
+    producer.publish_event("test-topic", "key1", {"x": 1})
+    producer.publish_event("test-topic", "key2", {"x": 2})
+
+    # Assert no produce calls occurred yet
+    mock_raw_producer.produce.assert_not_called()
+
+    producer.flush()
+    # Now they are produced
+    assert mock_raw_producer.produce.call_count == 2
+
+
+def test_middle_serialization_failure_prevents_all_kafka_produce() -> None:
+    """Verify that serialization failure on a middle event prevents any event from being produced."""
+    mock_raw_producer = Mock()
+    producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
+
+    # Event 1 is fine
+    producer.publish_event("test-topic", "key1", {"x": 1})
+
+    # Event 2 has type that raises TypeError in json.dumps (e.g., set is not JSON serializable)
+    with pytest.raises(EventSerializationError):
+        producer.publish_event("test-topic", "key2", {"x": {1, 2, 3}})
+
+    # Assert no produce calls occurred
+    mock_raw_producer.produce.assert_not_called()
+
+    # Also assert the producer is still technically READY (not failed)
+    assert not producer._failed
+
+
+def test_final_serialization_failure_prevents_all_kafka_produce() -> None:
+    """Verify that serialization failure on the final event prevents any event from being produced."""
+    mock_raw_producer = Mock()
+    producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
+
+    producer.publish_event("test-topic", "key1", {"x": 1})
+    producer.publish_event("test-topic", "key2", {"x": 2})
+
+    # Event 3 has non-serializable object
+    class NonSerializable:
+        pass
+
+    with pytest.raises(EventSerializationError):
+        producer.publish_event("test-topic", "key3", {"x": NonSerializable()})
+
+    mock_raw_producer.produce.assert_not_called()
+    assert not producer._failed
+
+
+def test_unicode_event_serialization() -> None:
+    """Verify that Unicode symbols and Vietnamese pathing serialize correctly without errors."""
+    mock_raw_producer = Mock()
+    producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
+
+    unicode_event = {"path": "thư_mục/mã.py", "symbol": "biến_số", "data": "dữ_liệu"}
+    producer.publish_event("test-topic", "key1", unicode_event)
+
+    assert len(producer._batch_records) == 1
+    topic, key, payload = producer._batch_records[0]
+
+    # Payload must be valid UTF-8 JSON bytes
+    import json
+
+    decoded = json.loads(payload.decode("utf-8"))
+    assert decoded == unicode_event
+
+
+def test_non_finite_json_value_is_rejected() -> None:
+    """Verify that NaN and Infinity JSON values are explicitly rejected during serialization."""
+    mock_raw_producer = Mock()
+    producer = KafkaEventProducer(bootstrap_servers="localhost:9092", producer_instance=mock_raw_producer)
+
+    with pytest.raises(EventSerializationError) as exc_info:
+        producer.publish_event("test-topic", "key1", {"value": float("nan")})
+
+    assert "Failed to serialize event" in str(exc_info.value)
+    mock_raw_producer.produce.assert_not_called()

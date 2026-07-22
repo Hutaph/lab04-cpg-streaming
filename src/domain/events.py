@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+from domain.constants import PARSER_VERSION
 from domain.enums import EventType
 
 
@@ -49,7 +50,7 @@ class EventFactory:
         file_id: str,
         file_path: str,
         content_hash: str,
-        parser_version: str = "1.0.0",
+        parser_version: str = PARSER_VERSION,
         schema_version: str = "1.0",
     ):
         self.repository_id = repository_id
