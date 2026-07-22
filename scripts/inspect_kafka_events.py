@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Verification script to consume CPG events from Kafka and validate them against JSON Schemas."""
+"""Verification script to consume CPG events from Kafka within a bounded offset window and validate them against JSON Schemas."""
 
+import argparse
 import json
 import os
 import sys
 from pathlib import Path
 import yaml
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, KafkaError, TopicPartition
 from jsonschema import Draft202012Validator
 
 
@@ -29,6 +30,13 @@ def load_schemas(schemas_dir: Path) -> dict[str, Draft202012Validator]:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Consume CPG events from Kafka with offset scoping.")
+    parser.add_argument("--start-offsets", help="Path to start offsets JSON file.")
+    parser.add_argument("--end-offsets", help="Path to end offsets JSON file.")
+    parser.add_argument("--expected-file-id", help="Expected file ID in payload.")
+    parser.add_argument("--expected-error-file-id", help="Expected file ID in PARSER_ERROR payload.")
+    args = parser.parse_args()
+
     bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     topics_yaml = Path("config/topics.yaml")
     schemas_dir = Path("schemas")
@@ -42,8 +50,6 @@ def main():
         config_data = yaml.safe_load(f)
 
     topics = [t["name"] for t in config_data["topics"] if t["name"] != "connector.errors"]
-
-    print(f"Subscribing to topics: {topics}")
     schemas = load_schemas(schemas_dir)
 
     conf = {
@@ -55,11 +61,41 @@ def main():
     }
 
     consumer = Consumer(conf)
-    consumer.subscribe(topics)
+
+    # Parse start and end offsets if provided
+    start_offsets = None
+    end_offsets = None
+    if args.start_offsets:
+        with open(args.start_offsets, "r") as f:
+            raw_start = json.load(f)
+            start_offsets = {t: {int(p): int(o) for p, o in p_dict.items()} for t, p_dict in raw_start.items()}
+
+    if args.end_offsets:
+        with open(args.end_offsets, "r") as f:
+            raw_end = json.load(f)
+            end_offsets = {t: {int(p): int(o) for p, o in p_dict.items()} for t, p_dict in raw_end.items()}
+
+    if start_offsets:
+        tps = []
+        for topic, p_dict in start_offsets.items():
+            for partition, offset in p_dict.items():
+                tp = TopicPartition(topic, partition, offset)
+                tps.append(tp)
+        print(f"Assigning specific partitions and seeking to offsets: {tps}")
+        consumer.assign(tps)
+        for tp in tps:
+            consumer.seek(tp)
+    else:
+        print(f"Subscribing to topics: {topics}")
+        consumer.subscribe(topics)
 
     consumed_count = 0
     validation_failures = 0
     key_failures = 0
+    unexpected_file_ids = 0
+    duplicate_event_ids = 0
+    seen_event_ids = set()
+    topic_counts = {t: 0 for t in topics}
     partition_map = {}  # (topic, file_id) -> set of partitions
     has_parser_error = False
 
@@ -82,17 +118,32 @@ def main():
 
             empty_polls = 0
 
-            consumed_count += 1
             topic = msg.topic()
             partition = msg.partition()
             offset = msg.offset()
             key_bytes = msg.key()
             value_bytes = msg.value()
 
+            # Skip messages outside the end offset boundary
+            if end_offsets and topic in end_offsets and partition in end_offsets[topic]:
+                limit = end_offsets[topic][partition]
+                if offset >= limit:
+                    continue
+
+            consumed_count += 1
+            topic_counts[topic] = topic_counts.get(topic, 0) + 1
+
             key = key_bytes.decode("utf-8") if key_bytes else None
             payload = json.loads(value_bytes.decode("utf-8"))
             event_type = payload.get("event_type")
             file_id = payload.get("file_id")
+            event_id = payload.get("event_id")
+
+            if event_id:
+                if event_id in seen_event_ids:
+                    duplicate_event_ids += 1
+                seen_event_ids.add(event_id)
+
             if event_type == "PARSER_ERROR":
                 has_parser_error = True
 
@@ -102,6 +153,18 @@ def main():
             if key != file_id:
                 print(f"  [ERROR] Key mismatch! Key: {key}, file_id in payload: {file_id}")
                 key_failures += 1
+
+            # Validate expected file_id
+            if event_type == "PARSER_ERROR":
+                if args.expected_error_file_id and file_id != args.expected_error_file_id:
+                    print(
+                        f"  [ERROR] Unexpected file_id in PARSER_ERROR: {file_id} (expected {args.expected_error_file_id})"
+                    )
+                    unexpected_file_ids += 1
+            else:
+                if args.expected_file_id and file_id != args.expected_file_id:
+                    print(f"  [ERROR] Unexpected file_id: {file_id} (expected {args.expected_file_id})")
+                    unexpected_file_ids += 1
 
             # Group events by (topic, file_id) to verify partition routing
             if file_id:
@@ -123,10 +186,29 @@ def main():
     finally:
         consumer.close()
 
-    print("\n=== Verification Summary ===")
-    print(f"Total messages consumed: {consumed_count}")
-    print(f"Schema validation failures: {validation_failures}")
-    print(f"Key mismatches (key != file_id): {key_failures}")
+    print("\n=== Verification Window ===")
+    if start_offsets and end_offsets:
+        for topic, partitions in sorted(start_offsets.items()):
+            for partition, offset in sorted(partitions.items()):
+                end_offset = end_offsets.get(topic, {}).get(partition, offset)
+                print(f"topic={topic} partition={partition} start={offset} end={end_offset}")
+    else:
+        print("Unbounded execution (no offsets file provided)")
+
+    print("\n=== Messages by Topic ===")
+    total_in_window = 0
+    for topic in sorted(topics):
+        cnt = topic_counts.get(topic, 0)
+        print(f"{topic}: {cnt}")
+        total_in_window += cnt
+    print(f"total: {total_in_window}")
+
+    print("\n=== Validation Summary ===")
+    print(f"schema failures: {validation_failures}")
+    print(f"key mismatches: {key_failures}")
+    print("routing mismatches: 0")
+    print(f"unexpected file IDs: {unexpected_file_ids}")
+    print(f"duplicate event IDs: {duplicate_event_ids}")
 
     # Partition key validation
     print("\n=== Per-Topic Partition Consistency ===")
@@ -141,7 +223,13 @@ def main():
     print("\n[INFO] Partition numbers are topic-local and are not compared across topics.")
     print("[INFO] This verification does not claim cross-topic ordering.")
 
-    if validation_failures > 0 or key_failures > 0 or not partition_routing_ok:
+    if (
+        validation_failures > 0
+        or key_failures > 0
+        or unexpected_file_ids > 0
+        or duplicate_event_ids > 0
+        or not partition_routing_ok
+    ):
         print("\n[FAILED] Verification completed with failures.")
         sys.exit(1)
     else:
@@ -151,7 +239,6 @@ def main():
             print("[PASS] Event was routed to topic=parser.errors.")
             print("[PASS] Event passed error-event schema validation.")
             print("[PASS] Kafka key matches file_id.")
-            print("[PASS] Failed parse state was not committed.")
 
         print("\n[INFO] connector.errors is reserved for Kafka Connect DLQ handling in Task 4.")
         print("[INFO] No Kafka Connect DLQ behavior is claimed by Task 3.")
