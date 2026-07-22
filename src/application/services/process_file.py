@@ -14,7 +14,7 @@ from application.ports import (
 from domain.models import SourceFile, ProcessingResult
 from domain.enums import ParseStatus, EventType
 from domain.events import EventFactory, EventEnvelope
-from domain.errors import ParsingError, PublishError, SchemaValidationError
+from domain.errors import ParsingError, PublishError
 from parsing.identifiers import IdentifierGenerator
 from parsing.diff import CpgDiffer
 

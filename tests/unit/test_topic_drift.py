@@ -5,7 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "infra/kafka"))
 
-from create_topics import check_drift
+from create_topics import check_drift  # noqa: E402
 
 
 def test_check_drift_matching():
@@ -13,7 +13,7 @@ def test_check_drift_matching():
     actual = {"topic.a": {"partitions": 3, "replication_factor": 1}}
     drift, logs = check_drift(desired, actual)
     assert not drift
-    assert any("[OK] Topic 'topic.a' matches" in l for l in logs)
+    assert any("[OK] Topic 'topic.a' matches" in log for log in logs)
 
 
 def test_check_drift_missing():
@@ -21,7 +21,7 @@ def test_check_drift_missing():
     actual = {}
     drift, logs = check_drift(desired, actual)
     assert not drift
-    assert any("MISSING:topic.b,3,1" in l for l in logs)
+    assert any("MISSING:topic.b,3,1" in log for log in logs)
 
 
 def test_check_drift_partition_mismatch():
@@ -29,7 +29,7 @@ def test_check_drift_partition_mismatch():
     actual = {"topic.c": {"partitions": 1, "replication_factor": 1}}
     drift, logs = check_drift(desired, actual)
     assert drift
-    assert any("Partitions mismatch: desired 3, actual 1" in l for l in logs)
+    assert any("Partitions mismatch: desired 3, actual 1" in log for log in logs)
 
 
 def test_check_drift_replication_mismatch():
@@ -37,4 +37,4 @@ def test_check_drift_replication_mismatch():
     actual = {"topic.d": {"partitions": 3, "replication_factor": 1}}
     drift, logs = check_drift(desired, actual)
     assert drift
-    assert any("Replication mismatch: desired 2, actual 1" in l for l in logs)
+    assert any("Replication mismatch: desired 2, actual 1" in log for log in logs)
