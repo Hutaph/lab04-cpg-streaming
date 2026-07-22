@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  # Apache Kafka Broker in KRaft mode (no Zookeeper required)
+  # Apache Kafka Broker in KRaft mode (no Zookeeper required).
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: cpg-kafka
@@ -14,9 +14,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REREPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_LATEST_COMMITTED_OFFSET_TO_COMPARE: 'true'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
       KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
@@ -66,8 +65,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      # TODO: Load credentials securely from env, do not hardcode secrets
-      - NEO4J_AUTH=neo4j/TODO_NEO4J_PASSWORD
+      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
@@ -80,9 +78,8 @@ services:
     ports:
       - "27017:27017"
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      # TODO: Load password securely from env
-      - MONGO_INITDB_ROOT_PASSWORD=TODO_MONGO_PASSWORD
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_ROOT_USERNAME:-root}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}"
     volumes:
       - mongodb_data:/data/db
       - ./mongodb/init:/docker-entrypoint-initdb.d
