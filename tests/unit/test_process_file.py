@@ -41,6 +41,11 @@ def test_unchanged_skip_flow() -> None:
     assert res.status == ParseStatus.SKIPPED_UNCHANGED
     # Assert parser was never called
     parser.parse_file.assert_not_called()
+    # Assert writer and state store were not modified
+    writer.write_event.assert_not_called()
+    writer.publish_event.assert_not_called()
+    writer.flush.assert_not_called()
+    state.commit.assert_not_called()
 
 
 def test_writer_failure_does_not_commit() -> None:
@@ -287,3 +292,241 @@ def test_invalid_parser_error_event_is_not_published() -> None:
     writer.write_event.assert_not_called()
     writer.publish_event.assert_not_called()
     state.commit.assert_not_called()
+
+
+def test_partial_delivery_failure_retains_state() -> None:
+    """Verify that a partial delivery failure (some successful events, one failure) raises PublishError and prevents state store commit."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    state = Mock()
+    state.get.return_value = None  # fresh parse
+
+    # Mock parser output with two nodes to ensure a batch of events is sent
+    meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_abc", 5, 1, 0, 0, 0, 2, 0, 1, ParseStatus.SUCCESS)
+    node1 = CodeNode("node_1", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+    node2 = CodeNode("node_2", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_abc",
+        nodes=[node1, node2],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+
+    # Create a mock publisher that simulates a partial delivery failure on flush
+    # It receives multiple calls to publish_event, and then flush raises PublishError
+    from application.ports import EventPublisherPort
+
+    writer = Mock(spec=EventPublisherPort)
+    writer.flush.side_effect = PublishError("Flush failed: event delivery failed for node_2")
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+
+    with pytest.raises(PublishError) as exc_info:
+        service.execute(sf)
+
+    assert "Flush failed" in str(exc_info.value)
+
+    # State store commit must NOT have been called
+    state.commit.assert_not_called()
+
+
+def test_deterministic_retry_event_ids() -> None:
+    """Verify that a retry after a simulated crash produces identical entity IDs and event IDs."""
+    from domain.models import CodeNode
+    from typing import Any
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    state = Mock()
+    state.get.return_value = None  # fresh parse
+
+    meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_abc", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
+    node1 = CodeNode("node_1", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_abc",
+        nodes=[node1],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+
+    # Capture the events published in the first run
+    first_run_events = []
+
+    class FirstRunWriter:
+        def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            first_run_events.append(event)
+
+        def write_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            first_run_events.append(event)
+
+        def flush(self) -> None:
+            pass
+
+    service_run1 = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=FirstRunWriter(),
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    # First execution succeeds, but we simulate a crash (state.commit is not called/fails)
+    service_run1.execute(sf)
+
+    # Second execution (retry) with the same repo/parser state and previous state still empty
+    second_run_events = []
+
+    class SecondRunWriter:
+        def publish_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            second_run_events.append(event)
+
+        def write_event(self, topic: str, event_key: str, event: dict[str, Any]) -> None:
+            second_run_events.append(event)
+
+        def flush(self) -> None:
+            pass
+
+    service_run2 = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=SecondRunWriter(),
+    )
+
+    service_run2.execute(sf)
+
+    assert len(first_run_events) == len(second_run_events)
+    assert len(first_run_events) > 0
+
+    for ev1, ev2 in zip(first_run_events, second_run_events):
+        # Event type must match
+        assert ev1["event_type"] == ev2["event_type"]
+        # Event ID must be identical across retries
+        assert ev1["event_id"] == ev2["event_id"]
+        # Content hash must be identical
+        assert ev1["content_hash"] == ev2["content_hash"]
+        # Entity payload IDs must match
+        if "node" in ev1:
+            assert ev1["node"]["node_id"] == ev2["node"]["node_id"]
+
+
+def test_previous_state_preserved_on_publish_failure() -> None:
+    """Verify that if a file was previously successfully processed, and a subsequent edit fails to publish, the previous state is preserved in the database."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 2"  # Edit version B
+
+    # Previous state contains state A
+    state = Mock()
+    state.get.return_value = FileState("file_id", "hash_version_A", ["node_A"], ["edge_A"])
+
+    # Mock parser output for version B
+    meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_version_B", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
+    node_B = CodeNode("node_B", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_version_B",
+        nodes=[node_B],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+
+    # Simulate publisher failure on flush
+    from application.ports import EventPublisherPort
+
+    writer = Mock(spec=EventPublisherPort)
+    writer.flush.side_effect = PublishError("Flush failed")
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+
+    with pytest.raises(PublishError):
+        service.execute(sf)
+
+    # State store commit must NOT have been called to write version B
+    state.commit.assert_not_called()
+    # Confirm state store delete was not called either
+    state.delete.assert_not_called()
+
+
+def test_unicode_identifiers_serialization() -> None:
+    """Verify that Unicode identifiers serialize and validate without errors."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = "dữ_liệu = 1".encode("utf-8")
+
+    state = Mock()
+    state.get.return_value = None
+
+    meta = FileMetadata(
+        "file_id", "test_repo", "tiếng_việt.py", "hash_abc", 15, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS
+    )
+    node = CodeNode("node_1", "file_id", "Module", "dữ_liệu", None, None, 1, 0, 1, 0, {"tên": "giá_trị"})
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_abc",
+        nodes=[node],
+        edges=[],
+        metadata=meta,
+    )
+
+    validator = Mock()
+    writer = Mock()
+
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "tiếng_việt.py", "c1", 15)
+    res = service.execute(sf)
+
+    assert res.status == ParseStatus.SUCCESS
+    if hasattr(writer, "publish_event"):
+        writer.publish_event.assert_called()

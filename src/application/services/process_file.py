@@ -56,6 +56,10 @@ class ProcessFileService:
         """Parses a single file, publishes events to target destination, and commits SQLite state."""
         relative_path = Path(source_file.relative_path)
 
+        # Reset any stale producer errors before processing the batch
+        if hasattr(self.writer, "clear_errors"):
+            self.writer.clear_errors()
+
         # 1. Read raw source bytes strict
         try:
             source_bytes = self.repo_adapter.read_file(relative_path)

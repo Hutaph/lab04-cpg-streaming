@@ -65,12 +65,20 @@ class KafkaEventProducer(EventPublisherPort):
         except Exception as exc:
             raise PublishError(f"Failed to queue message to Kafka topic {topic}: {exc}") from exc
 
+    def clear_errors(self) -> None:
+        """Resets the internal delivery error list."""
+        self._errors.clear()
+
     def flush(self) -> None:
         """Blocks until all outstanding messages in the queue are sent and checks for errors."""
         if self._initialized and self._producer:
             try:
                 # Blocks until all messages in the queue are delivered/failed
-                self._producer.flush(timeout=10.0)
+                undelivered = self._producer.flush(timeout=10.0)
+                if undelivered > 0:
+                    self._errors.clear()
+                    raise PublishError(f"Flush timeout: {undelivered} messages remained undelivered after timeout")
+
                 # Check if any messages in the batch encountered errors in delivery callback
                 if self._errors:
                     errs_summary = "; ".join(self._errors)
@@ -79,4 +87,5 @@ class KafkaEventProducer(EventPublisherPort):
             except PublishError:
                 raise
             except Exception as exc:
+                self._errors.clear()
                 raise PublishError(f"Failed to flush Kafka producer: {exc}") from exc
