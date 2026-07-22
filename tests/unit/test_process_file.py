@@ -154,3 +154,136 @@ def test_process_file_publishes_events_in_logical_order() -> None:
         ("source.metadata", "FILE_METADATA_UPSERT"),
     ]
     assert call_sequence == expected
+
+
+def test_validation_failure_prevents_all_publishing() -> None:
+    """Verify that if validation fails on any event in the batch, the validation exception is raised and no events are published or state committed."""
+    from domain.errors import SchemaValidationError
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+
+    state = Mock()
+    state.get.return_value = None  # fresh parse
+
+    # Mock parser output graph
+    meta = FileMetadata("file_id", "test_repo", "foo.py", "hash_abc", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
+    new_node = CodeNode("new_node_id", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_abc",
+        nodes=[new_node],
+        edges=[],
+        metadata=meta,
+    )
+
+    # Force validator to raise validation error
+    validator = Mock()
+    validator.validate.side_effect = SchemaValidationError("Invalid schema")
+
+    writer = Mock()
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+
+    with pytest.raises(SchemaValidationError):
+        service.execute(sf)
+
+    # Verify that writer was never called to publish or write events
+    writer.write_event.assert_not_called()
+    writer.publish_event.assert_not_called()
+    writer.flush.assert_not_called()
+
+    # Verify state store was not committed
+    state.commit.assert_not_called()
+
+
+def test_syntax_error_emits_parser_error() -> None:
+    """Verify that a parsing/syntax error results in a PARSER_ERROR event published to parser.errors without committing state."""
+    from domain.errors import ParsingError
+
+    repo = Mock()
+    repo.read_file.return_value = b"invalid python source code"
+
+    state = Mock()
+    state.get.return_value = None
+
+    parser = Mock()
+    parser.parse_file.side_effect = ParsingError("Syntax error at line 1")
+
+    validator = Mock()  # mock validator passes validation by default
+
+    writer = Mock()
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+    res = service.execute(sf)
+
+    # Verify status is FAILED
+    assert res.status == ParseStatus.FAILED
+    assert res.error == "Syntax error at line 1"
+
+    # Verify a PARSER_ERROR event was sent to parser.errors
+    if hasattr(writer, "publish_event"):
+        writer.publish_event.assert_called_once()
+        # Verify first argument (topic) is parser.errors
+        assert writer.publish_event.call_args[0][0] == "parser.errors"
+    else:
+        writer.write_event.assert_called_once()
+        assert writer.write_event.call_args[0][0] == "parser.errors"
+
+    # Verify state store was not committed
+    state.commit.assert_not_called()
+
+
+def test_invalid_parser_error_event_is_not_published() -> None:
+    """Verify that if the PARSER_ERROR event itself fails schema validation, the validation exception is raised and not published."""
+    from domain.errors import ParsingError, SchemaValidationError
+
+    repo = Mock()
+    repo.read_file.return_value = b"invalid python source code"
+
+    state = Mock()
+    state.get.return_value = None
+
+    parser = Mock()
+    parser.parse_file.side_effect = ParsingError("Syntax error")
+
+    validator = Mock()
+    # Force validator to fail on PARSER_ERROR
+    validator.validate.side_effect = SchemaValidationError("Invalid error schema")
+
+    writer = Mock()
+    service = ProcessFileService(
+        repo_adapter=repo,
+        parser=parser,
+        state_store=state,
+        validator=validator,
+        writer=writer,
+    )
+
+    sf = SourceFile("test_repo", "root", "foo.py", "c1", 5)
+
+    with pytest.raises(SchemaValidationError):
+        service.execute(sf)
+
+    # Verify that writer was not called
+    writer.write_event.assert_not_called()
+    writer.publish_event.assert_not_called()
+    state.commit.assert_not_called()

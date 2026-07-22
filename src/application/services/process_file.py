@@ -166,11 +166,7 @@ class ProcessFileService:
         serialized_events = []
         for topic, envelope in events_to_send:
             evt_dict = envelope.to_dict()
-            try:
-                self.validator.validate(envelope.event_type.value, evt_dict)
-            except SchemaValidationError as exc:
-                # Syntax error event generated on validation fail
-                return self._handle_failure(source_file, "SchemaValidationError", str(exc), content_hash)
+            self.validator.validate(envelope.event_type.value, evt_dict)
             serialized_events.append((topic, evt_dict))
 
         # Publish/Write events and flush
@@ -233,10 +229,7 @@ class ProcessFileService:
         evt_dict = envelope.to_dict()
 
         # Validate
-        try:
-            self.validator.validate(envelope.event_type.value, evt_dict)
-        except SchemaValidationError:
-            pass  # Avoid infinite error loop, push raw
+        self.validator.validate(envelope.event_type.value, evt_dict)
 
         # Publish error event to parser error topic
         try:
