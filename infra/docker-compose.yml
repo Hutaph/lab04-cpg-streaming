@@ -31,46 +31,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Kafka Connect Service loaded with Neo4j Connector Plugin
-  kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.3.0
-    container_name: cpg-kafka-connect
-    ports:
-      - "8083:8083"
-    depends_on:
-      - kafka
-    environment:
-      CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
-      CONNECT_REST_PORT: 8083
-      CONNECT_GROUP_ID: "cpg-connect-group"
-      CONNECT_CONFIG_STORAGE_TOPIC: "cpg-connect-configs"
-      CONNECT_OFFSET_STORAGE_TOPIC: "cpg-connect-offsets"
-      CONNECT_STATUS_STORAGE_TOPIC: "cpg-connect-status"
-      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
-      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/filestream-connectors,/opt/kafka-connect-plugins"
-    volumes:
-      # Volume mapping to load Neo4j Sink Connector jar files
-      - ./kafka-connect/plugins:/opt/kafka-connect-plugins
-      - ./kafka-connect/connectors:/opt/kafka-connectors
-
-  # Neo4j Graph Database
-  neo4j:
-    image: neo4j:5.5.0-community
-    container_name: cpg-neo4j
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    environment:
-      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-      - ./neo4j/init:/var/lib/neo4j/import
-
   # MongoDB Document Database
   mongodb:
     image: mongo:6.0.4
@@ -86,6 +46,5 @@ services:
 
 volumes:
   kafka_data:
-  neo4j_data:
-  neo4j_logs:
   mongodb_data:
+

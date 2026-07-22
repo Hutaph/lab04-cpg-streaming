@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Shell script invoking Kafka Connect REST API endpoints to register sink nodes
-# TODO: Implement in Phase 8
+exec uv run python "$(dirname "$0")/deploy_connectors.py" "$@"
 
-echo "Registering Kafka Neo4j Connectors..."

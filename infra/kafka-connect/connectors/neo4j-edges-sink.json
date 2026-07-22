@@ -2,14 +2,19 @@
   "name": "neo4j-edges-sink",
   "config": {
     "topics": "cpg.edges",
-    "connector.class": "union.neo4j.kafka.connect.Neo4jSinkConnector",
+    "connector.class": "streams.kafka.connect.sink.Neo4jSinkConnector",
     "errors.deadletterqueue.topic.name": "connector.errors",
-    "errors.deadletterqueue.topic.replication.factor": 1,
+    "errors.deadletterqueue.topic.replication.factor": "1",
+    "errors.deadletterqueue.context.headers.enable": "true",
     "errors.tolerance": "all",
-    "neo4j.uri": "bolt://neo4j:7687",
+    "kafka.bootstrap.servers": "kafka:29092",
+    "neo4j.server.uri": "bolt://cpg-neo4j:7687",
     "neo4j.authentication.basic.username": "neo4j",
-    "neo4j.authentication.basic.password": "TODO_NEO4J_PASSWORD",
-    "neo4j.encryption.enabled": false,
-    "neo4j.topic.cypher.cpg.edges": "MATCH (source:CodeNode {node_id: event.source_id}), (target:CodeNode {node_id: event.target_id}) MERGE (source)-[r:CPG_EDGE {edge_id: event.edge_id}]->(target) ON CREATE SET r.edge_type = event.edge_type, r.properties = event.properties ON MATCH SET r.properties = event.properties"
+    "neo4j.authentication.basic.password": "${NEO4J_PASSWORD}",
+    "neo4j.encryption.enabled": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "neo4j.topic.cypher.cpg.edges": "CALL { WITH event WITH event WHERE event.event_type = 'EDGE_UPSERT' MERGE (src:CPGNode {id: event.edge.source_id}) ON CREATE SET src.placeholder = true, src.file_id = event.file_id MERGE (dst:CPGNode {id: event.edge.target_id}) ON CREATE SET dst.placeholder = true, dst.file_id = event.file_id MERGE (src)-[r:CPG_EDGE {edge_id: event.edge.edge_id}]->(dst) SET r += CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.edge.properties ELSE {} END, r.edge_type = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.edge.edge_type ELSE r.edge_type END, r.repository_id = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.repository_id ELSE r.repository_id END, r.file_id = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.file_id ELSE r.file_id END, r.parser_version = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.parser_version ELSE r.parser_version END, r.schema_version = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.schema_version ELSE r.schema_version END, r.content_hash = CASE WHEN r.content_hash IS NULL OR r.content_hash <> event.content_hash THEN event.content_hash ELSE r.content_hash END } CALL { WITH event WITH event WHERE event.event_type = 'EDGE_DELETE' MATCH ()-[r:CPG_EDGE {edge_id: event.edge.edge_id}]->() WHERE r.content_hash = event.content_hash DELETE r }"
   }
 }

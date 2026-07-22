@@ -44,4 +44,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 markers = [
     "kafka: marks tests that require a live Kafka broker (deselect with '-m \"not kafka\"')",
+    "neo4j: marks tests that require a live Neo4j database",
+    "kafka_connect: marks tests that require a live Kafka Connect instance",
 ]

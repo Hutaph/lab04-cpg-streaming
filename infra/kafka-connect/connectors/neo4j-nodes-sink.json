@@ -2,14 +2,19 @@
   "name": "neo4j-nodes-sink",
   "config": {
     "topics": "cpg.nodes",
-    "connector.class": "union.neo4j.kafka.connect.Neo4jSinkConnector",
+    "connector.class": "streams.kafka.connect.sink.Neo4jSinkConnector",
     "errors.deadletterqueue.topic.name": "connector.errors",
-    "errors.deadletterqueue.topic.replication.factor": 1,
+    "errors.deadletterqueue.topic.replication.factor": "1",
+    "errors.deadletterqueue.context.headers.enable": "true",
     "errors.tolerance": "all",
-    "neo4j.uri": "bolt://neo4j:7687",
+    "kafka.bootstrap.servers": "kafka:29092",
+    "neo4j.server.uri": "bolt://cpg-neo4j:7687",
     "neo4j.authentication.basic.username": "neo4j",
-    "neo4j.authentication.basic.password": "TODO_NEO4J_PASSWORD",
-    "neo4j.encryption.enabled": false,
-    "neo4j.topic.cypher.cpg.nodes": "MERGE (n:CodeNode {node_id: event.node_id}) ON CREATE SET n.node_type = event.node_type, n.name = event.name, n.qualified_name = event.qualified_name, n.file_path = event.file_path, n.line_start = event.line_start, n.column_start = event.column_start, n.line_end = event.line_end, n.column_end = event.column_end, n.properties = event.properties ON MATCH SET n.name = event.name, n.properties = event.properties"
+    "neo4j.authentication.basic.password": "${NEO4J_PASSWORD}",
+    "neo4j.encryption.enabled": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "neo4j.topic.cypher.cpg.nodes": "CALL { WITH event WITH event WHERE event.event_type = 'NODE_UPSERT' MERGE (n:CPGNode {id: event.node.node_id}) ON CREATE SET n += event.node.properties, n.placeholder = false, n.node_type = event.node.node_type, n.name = event.node.name, n.qualified_name = event.node.qualified_name, n.ast_path = event.node.ast_path, n.line_start = event.node.line_start, n.column_start = event.node.column_start, n.line_end = event.node.line_end, n.column_end = event.node.column_end, n.repository_id = event.repository_id, n.commit_sha = event.commit_sha, n.file_path = event.file_path, n.file_id = event.file_id, n.parser_version = event.parser_version, n.schema_version = event.schema_version, n.content_hash = event.content_hash ON MATCH SET n += CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.properties ELSE {} END, n.node_type = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.node_type ELSE n.node_type END, n.name = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.name ELSE n.name END, n.qualified_name = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.qualified_name ELSE n.qualified_name END, n.ast_path = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.ast_path ELSE n.ast_path END, n.line_start = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.line_start ELSE n.line_start END, n.column_start = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.column_start ELSE n.column_start END, n.line_end = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.line_end ELSE n.line_end END, n.column_end = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.node.column_end ELSE n.column_end END, n.repository_id = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.repository_id ELSE n.repository_id END, n.commit_sha = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.commit_sha ELSE n.commit_sha END, n.file_path = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.file_path ELSE n.file_path END, n.file_id = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.file_id ELSE n.file_id END, n.parser_version = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.parser_version ELSE n.parser_version END, n.schema_version = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.schema_version ELSE n.schema_version END, n.placeholder = false, n.content_hash = CASE WHEN n.content_hash IS NULL OR n.content_hash <> event.content_hash THEN event.content_hash ELSE n.content_hash END } CALL { WITH event WITH event WHERE event.event_type = 'NODE_DELETE' MATCH (n:CPGNode {id: event.node.node_id}) WHERE n.content_hash = event.content_hash DETACH DELETE n }"
   }
 }

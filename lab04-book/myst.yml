@@ -26,6 +26,7 @@ project:
     - file: task1_clone_explore.ipynb
     - file: task2_parser_service.ipynb
     - file: task3_kafka_topics.ipynb
+    - file: task4_neo4j_sink.ipynb
     - file: task5_spark_mongodb.ipynb
 site:
   template: book-theme
