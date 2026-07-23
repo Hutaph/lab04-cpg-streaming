@@ -108,18 +108,29 @@ class ProcessFileService:
             schema_version=SCHEMA_VERSION,
         )
 
+        delete_hash = prev_state.content_hash if prev_state else content_hash
+        delete_factory = EventFactory(
+            repository_id=source_file.repository_id,
+            commit_sha=source_file.commit_sha,
+            file_id=file_id,
+            file_path=str(relative_path),
+            content_hash=delete_hash,
+            parser_version=PARSER_VERSION,
+            schema_version=SCHEMA_VERSION,
+        )
+
         event_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         events_to_send: list[tuple[str, EventEnvelope]] = []
 
         # 1. EDGE_DELETE events
         for e_id in diff.removed_edge_ids:
-            evt_id = IdentifierGenerator.generate_event_id(EventType.EDGE_DELETE.value, e_id, content_hash)
-            events_to_send.append((self.topic_edges, factory.create_edge_delete(evt_id, event_time, e_id)))
+            evt_id = IdentifierGenerator.generate_event_id(EventType.EDGE_DELETE.value, e_id, delete_hash)
+            events_to_send.append((self.topic_edges, delete_factory.create_edge_delete(evt_id, event_time, e_id)))
 
         # 2. NODE_DELETE events
         for n_id in diff.removed_node_ids:
-            evt_id = IdentifierGenerator.generate_event_id(EventType.NODE_DELETE.value, n_id, content_hash)
-            events_to_send.append((self.topic_nodes, factory.create_node_delete(evt_id, event_time, n_id)))
+            evt_id = IdentifierGenerator.generate_event_id(EventType.NODE_DELETE.value, n_id, delete_hash)
+            events_to_send.append((self.topic_nodes, delete_factory.create_node_delete(evt_id, event_time, n_id)))
 
         # 3. NODE_UPSERT events
         for node in diff.current_nodes:

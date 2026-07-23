@@ -23,3 +23,24 @@ def test_load_env() -> None:
     assert "KAFKA_BOOTSTRAP_SERVERS" in env
     assert env.get("TOPIC_NODES") == "cpg.nodes"
     assert env.get("TOPIC_EDGES") == "cpg.edges"
+
+
+def test_generation_id_determinism() -> None:
+    """Verify compute_generation_id behaves deterministically and is sensitive to all inputs."""
+    import generation_helper
+
+    g1 = generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "1.0")
+    g2 = generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "1.0")
+    # Same inputs yield identical hash
+    assert g1 == g2
+
+    # Verify input drift produces different hashes
+    assert g1 != generation_helper.compute_generation_id("file_2", "hash_1", "1.0.0", "1.0")
+    assert g1 != generation_helper.compute_generation_id("file_1", "hash_2", "1.0.0", "1.0")
+    assert g1 != generation_helper.compute_generation_id("file_1", "hash_1", "2.0.0", "1.0")
+    assert g1 != generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "2.0")
+
+    # Unicode determinism check
+    u1 = generation_helper.compute_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
+    u2 = generation_helper.compute_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
+    assert u1 == u2

@@ -14,8 +14,16 @@ from spark_jobs.metadata_to_mongodb import (  # noqa: E402
 )
 
 
-def test_parse_args_uses_task5_defaults() -> None:
+def test_parse_args_uses_task5_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify defaults match the repository's Kafka, MongoDB, and checkpoint config."""
+    monkeypatch.delenv("KAFKA_BOOTSTRAP_SERVERS", raising=False)
+    monkeypatch.delenv("METADATA_TOPIC", raising=False)
+    monkeypatch.delenv("MONGODB_URI", raising=False)
+    monkeypatch.delenv("MONGODB_DATABASE", raising=False)
+    monkeypatch.delenv("MONGODB_COLLECTION", raising=False)
+    monkeypatch.delenv("SPARK_CHECKPOINT_PATH", raising=False)
+    monkeypatch.delenv("KAFKA_STARTING_OFFSETS", raising=False)
+
     config = parse_args([])
 
     assert config.bootstrap_servers == "localhost:9092"

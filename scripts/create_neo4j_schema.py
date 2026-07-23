@@ -27,7 +27,7 @@ def wait_for_neo4j(password: str) -> bool:
                 [
                     "docker",
                     "exec",
-                    "-t",
+                    "-i",
                     "cpg-neo4j",
                     "cypher-shell",
                     "-u",
@@ -42,8 +42,10 @@ def wait_for_neo4j(password: str) -> bool:
             if res.returncode == 0:
                 print("Neo4j is healthy and responsive.")
                 return True
-        except Exception:
-            pass
+            else:
+                print(f"Probe failed with code {res.returncode}. Stderr: {res.stderr.strip()}")
+        except Exception as e:
+            print(f"Exception during probe: {e}")
         print(f"Neo4j is not ready yet. Retrying in 2 seconds... ({i}/{max_retries})")
         time.sleep(2)
     print("Error: Neo4j did not become healthy in time.")
@@ -62,6 +64,10 @@ def main() -> None:
     // Enforce unique node IDs for idempotency
     CREATE CONSTRAINT cpg_node_id_unique IF NOT EXISTS
     FOR (node:CPGNode) REQUIRE node.id IS UNIQUE;
+
+    // Enforce unique tombstone keys
+    CREATE CONSTRAINT cpg_tombstone_unique IF NOT EXISTS
+    FOR (t:CPGNodeTombstone) REQUIRE (t.id, t.generation_id) IS UNIQUE;
 
     // Index on file_id for quick querying/filtering
     CREATE INDEX file_id_idx IF NOT EXISTS

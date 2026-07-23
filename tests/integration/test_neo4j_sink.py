@@ -14,27 +14,6 @@ sys.path.append(str(scripts_dir))
 import deploy_connectors  # noqa: E402
 
 
-@pytest.fixture(scope="module")
-def env_vars() -> dict[str, str]:
-    return deploy_connectors.load_env()
-
-
-@pytest.fixture(scope="module")
-def neo4j_password(env_vars: dict[str, str]) -> str:
-    return env_vars.get("NEO4J_PASSWORD", "CHANGE_ME_NEO4J_PASSWORD")
-
-
-@pytest.fixture(scope="module")
-def kafka_producer(env_vars: dict[str, str]) -> Producer:
-    bootstrap_servers = env_vars.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-    conf = {
-        "bootstrap.servers": bootstrap_servers,
-        "acks": "all",
-        "retries": 3,
-    }
-    return Producer(conf)
-
-
 def run_cypher_query(query: str, password: str) -> list[list[str]]:
     """Runs a Cypher query inside cpg-neo4j container and returns split tab-separated lines."""
     try:
@@ -112,6 +91,7 @@ def test_schema_bootstrap_twice(env_vars: dict[str, str]):
     # Verify constraint exists
     checks = run_cypher_query("SHOW CONSTRAINTS;", password)
     assert any("cpg_node_id_unique" in col for row in checks for col in row)
+    assert any("cpg_tombstone_unique" in col for row in checks for col in row)
 
 
 @pytest.mark.kafka_connect
@@ -167,7 +147,7 @@ def test_node_ingestion_scenarios(kafka_producer: Producer, neo4j_password: str)
     time.sleep(3.5)  # Wait for ingestion
 
     res = run_cypher_query(
-        f"MATCH (n:CPGNode {{id: '{node_id}'}}) RETURN n.node_type, n.name, n.placeholder, n.content_hash;",
+        f"MATCH (n:CPGNode {{id: '{node_id}'}}) RETURN n.node_type, n.name, n.placeholder, n.content_hash, n.generation_id;",
         neo4j_password,
     )
     assert len(res) == 2  # header + row
@@ -175,6 +155,7 @@ def test_node_ingestion_scenarios(kafka_producer: Producer, neo4j_password: str)
     assert res[1][1] == "x"
     assert res[1][2] == "false"
     assert res[1][3] == "hash_version_1"
+    assert res[1][4] == "test_file_id_node_ingest:hash_version_1:1.0.0:1.0"
 
     # 2. Exact Replay (counts and hashes shouldn't change)
     kafka_producer.produce(node_topic, key=file_id, value=json.dumps(upsert_evt))
@@ -237,6 +218,10 @@ def test_edge_ingestion_and_placeholder_scenarios(kafka_producer: Producer, neo4
     edge_id = "test_edge_id_1"
     src_id = "test_src_node_id"
     dst_id = "test_dst_node_id"
+
+    # Clean up leftovers
+    run_cypher_query(f"MATCH (n:CPGNode) WHERE n.id IN ['{src_id}', '{dst_id}'] DETACH DELETE n;", neo4j_password)
+    run_cypher_query(f"MATCH ()-[r:CPG_EDGE]->() WHERE r.edge_id = '{edge_id}' DETACH DELETE r;", neo4j_password)
 
     # 1. Edge-before-node pattern
     # Ingest edge where source and target nodes do not exist yet
@@ -526,3 +511,247 @@ def test_base_compose_without_neo4j_secret():
         env=env,
     )
     assert res.returncode == 0, f"Base compose configuration check failed: {res.stderr}"
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+def test_reserved_properties_protection(kafka_producer: Producer, neo4j_password: str):
+    """Verify that a node upsert payload containing reserved properties does not overwrite the canonical graph system fields."""
+    node_topic = "cpg.nodes"
+    file_id = "test_file_id_reserved_prop"
+    node_id = "test_node_id_reserved"
+
+    evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_reserved_up_1",
+        "event_type": "NODE_UPSERT",
+        "event_time": "2026-07-22T10:00:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_1",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": "hash_version_1",
+        "parser_version": "1.0.0",
+        "node": {
+            "node_id": node_id,
+            "node_type": "Assign",
+            "name": "y",
+            "qualified_name": "y",
+            "ast_path": "Module.body[0]",
+            "line_start": 1,
+            "column_start": 0,
+            "line_end": 1,
+            "column_end": 5,
+            # Malicious/override properties trying to change system fields
+            "properties": {
+                "id": "malicious_node_id",
+                "file_id": "malicious_file_id",
+                "placeholder": "malicious_placeholder",
+                "generation_id": "malicious_generation_id",
+            },
+        },
+    }
+
+    kafka_producer.produce(node_topic, key=file_id, value=json.dumps(evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    res = run_cypher_query(
+        f"MATCH (n:CPGNode {{id: '{node_id}'}}) RETURN n.id, n.file_id, n.placeholder, n.generation_id;",
+        neo4j_password,
+    )
+    assert len(res) == 2
+    assert res[1][0] == node_id  # Should NOT be override_id
+    assert res[1][1] == file_id  # Should NOT be override_file
+    assert res[1][2] == "false"  # Should NOT be override_placeholder
+    assert res[1][3] != "malicious_generation_id"
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+def test_placeholder_resurrection_protection(kafka_producer: Producer, neo4j_password: str):
+    """Verify that replaying an old edge after node deletion does not resurrect the deleted node as a placeholder."""
+    edge_topic = "cpg.edges"
+    node_topic = "cpg.nodes"
+    file_id = "test_resurrection_file_id"
+    edge_id = "test_resurrection_edge_id"
+    src_id = "resurrect_src_id"
+    dst_id = "resurrect_dst_id"
+
+    # 1. EDGE_UPSERT (creates placeholders)
+    edge_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_res_e_up_1",
+        "event_type": "EDGE_UPSERT",
+        "event_time": "2026-07-22T10:00:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_1",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": "gen_hash_resurrect",
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "AST_CHILD",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # 2. Hydrate source node
+    node_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_res_n_up_1",
+        "event_type": "NODE_UPSERT",
+        "event_time": "2026-07-22T10:01:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_1",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": "gen_hash_resurrect",
+        "parser_version": "1.0.0",
+        "node": {
+            "node_id": src_id,
+            "node_type": "Constant",
+            "name": "u",
+            "qualified_name": "u",
+            "ast_path": "Module.body[0]",
+            "line_start": 1,
+            "column_start": 0,
+            "line_end": 1,
+            "column_end": 1,
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(node_topic, key=file_id, value=json.dumps(node_evt))
+    kafka_producer.flush()
+    time.sleep(3.0)
+
+    # 3. NODE_DELETE (deletes source and should create a tombstone)
+    delete_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_res_n_del_1",
+        "event_type": "NODE_DELETE",
+        "event_time": "2026-07-22T10:02:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_1",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": "gen_hash_resurrect",
+        "parser_version": "1.0.0",
+        "node": {"node_id": src_id},
+    }
+    kafka_producer.produce(node_topic, key=file_id, value=json.dumps(delete_evt))
+    kafka_producer.flush()
+    time.sleep(3.0)
+
+    # Confirm node is deleted
+    res_deleted = run_cypher_query(f"MATCH (n:CPGNode {{id: '{src_id}'}}) RETURN count(n);", neo4j_password)
+    assert res_deleted[1][0] == "0"
+
+    # Confirm tombstone exists
+    res_tomb = run_cypher_query(f"MATCH (t:CPGNodeTombstone {{id: '{src_id}'}}) RETURN count(t);", neo4j_password)
+    assert res_tomb[1][0] == "1"
+
+    # 4. Replay the old EDGE_UPSERT. It should NOT recreate the placeholder node for src_id!
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    res_resurrected = run_cypher_query(f"MATCH (n:CPGNode {{id: '{src_id}'}}) RETURN count(n);", neo4j_password)
+    assert res_resurrected[1][0] == "0"
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+@pytest.mark.kafka_connect
+def test_edge_endpoint_mismatch_fails_to_dlq(kafka_producer: Producer, env_vars: dict[str, str], neo4j_password: str):
+    """Verify that inserting a second edge with the same edge_id but different endpoints fails endpoints check and routes to DLQ."""
+    bootstrap_servers = env_vars.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    dlq_topic = "connector.errors"
+    edge_topic = "cpg.edges"
+    file_id = "test_edge_mismatch_file_id"
+    edge_id = "test_mismatch_edge_id_1"
+    src_id = "mismatch_src"
+    dst_id = "mismatch_dst"
+    dst_mismatch_id = "mismatch_dst_different"
+
+    # Create consumer for DLQ
+    conf = {
+        "bootstrap.servers": bootstrap_servers,
+        "group.id": f"test-dlq-mismatch-group-{int(time.time())}",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": "false",
+    }
+    consumer = Consumer(conf)
+    consumer.subscribe([dlq_topic])
+    consumer.poll(1.0)
+
+    # 1. Ingest valid edge src -> dst
+    edge_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_e_mismatch_1",
+        "event_type": "EDGE_UPSERT",
+        "event_time": "2026-07-22T10:00:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_1",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": "hash_version_mismatch",
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "AST_CHILD",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Verify relationship exists
+    res_rel = run_cypher_query(
+        f"MATCH (s)-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->(d) RETURN s.id, d.id;",
+        neo4j_password,
+    )
+    assert len(res_rel) == 2
+    assert res_rel[1][0] == src_id
+    assert res_rel[1][1] == dst_id
+
+    # 2. Ingest duplicate edge_id but mismatching endpoints src -> dst_mismatch_id
+    mismatch_evt = dict(edge_evt)
+    mismatch_evt["event_id"] = "evt_e_mismatch_2"
+    mismatch_evt["edge"] = dict(edge_evt["edge"])
+    mismatch_evt["edge"]["target_id"] = dst_mismatch_id
+
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(mismatch_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Verify relationship endpoints did NOT change in Neo4j
+    res_rel_post = run_cypher_query(
+        f"MATCH (s)-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->(d) RETURN s.id, d.id;",
+        neo4j_password,
+    )
+    assert len(res_rel_post) == 2
+    assert res_rel_post[1][0] == src_id
+    assert res_rel_post[1][1] == dst_id  # unchanged!
+
+    # 3. Read from DLQ topic and verify record is captured
+    dlq_msg = consumer.poll(timeout=10.0)
+    assert dlq_msg is not None, "Mismatch record did not reach DLQ"
+    assert dlq_msg.error() is None
+
+    # Verify connector health is still RUNNING
+    code, status = deploy_connectors.make_request("http://localhost:8083/connectors/neo4j-edges-sink/status")
+    assert code == 200
+    assert status.get("connector", {}).get("state") == "RUNNING"
+    assert status.get("tasks", [{}])[0].get("state") == "RUNNING"
+
+    consumer.close()

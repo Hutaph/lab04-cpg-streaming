@@ -2,7 +2,10 @@ import os
 import sys
 import subprocess
 import json
+import csv
+import io
 from pathlib import Path
+from typing import Any
 
 
 def load_env() -> dict[str, str]:
@@ -20,7 +23,7 @@ def load_env() -> dict[str, str]:
 
 
 def run_cypher(query: str, password: str) -> list[list[str]]:
-    """Runs a cypher query using cypher-shell via docker exec and parses plain tab-separated output."""
+    """Runs a cypher query using cypher-shell --format csv via docker exec and parses it."""
     try:
         res = subprocess.run(
             [
@@ -44,40 +47,52 @@ def run_cypher(query: str, password: str) -> list[list[str]]:
             print(f"Cypher error: {res.stderr.strip()}", file=sys.stderr)
             return []
 
-        lines = res.stdout.strip().splitlines()
-        results = []
-        for line in lines:
-            if line:
-                results.append(line.split("\t"))
-        return results
+        reader = csv.reader(io.StringIO(res.stdout.strip()), skipinitialspace=True)
+        return list(reader)
     except Exception as exc:
         print(f"Execution error: {exc}", file=sys.stderr)
         return []
+
+
+def cast_value(val: str) -> Any:
+    if val == "" or val.lower() == "null":
+        return None
+    if val.isdigit():
+        return int(val)
+    try:
+        return float(val)
+    except ValueError:
+        return val
 
 
 def main() -> None:
     env = load_env()
     password = env.get("NEO4J_PASSWORD", "CHANGE_ME_NEO4J_PASSWORD")
 
-    # Define queries
+    # Define canonical queries
     queries = {
         "node_count_by_file": "MATCH (n:CPGNode) RETURN n.file_id AS file_id, count(n) AS node_count ORDER BY node_count DESC LIMIT 10;",
         "relationship_count_by_file": "MATCH (:CPGNode)-[r:CPG_EDGE]->(:CPGNode) RETURN r.file_id AS file_id, count(r) AS edge_count ORDER BY edge_count DESC LIMIT 10;",
         "duplicate_nodes": "MATCH (n:CPGNode) WITH n.id AS id, count(n) AS count WHERE count > 1 RETURN id, count;",
         "duplicate_edges": "MATCH ()-[r:CPG_EDGE]->() WITH r.edge_id AS id, count(r) AS count WHERE count > 1 RETURN id, count;",
         "placeholders": "MATCH (n:CPGNode {placeholder: true}) RETURN n.id AS node_id, n.file_id AS file_id LIMIT 10;",
-        "content_generations": "MATCH (n:CPGNode) RETURN DISTINCT n.file_id AS file_id, n.content_hash AS content_hash LIMIT 10;",
-        "stale_entities": "MATCH (n:CPGNode) WITH n.file_id AS file_id, count(DISTINCT n.content_hash) AS hash_count WHERE hash_count > 1 RETURN file_id, hash_count;",
-        "sample_relationships": "MATCH (src:CPGNode)-[r:CPG_EDGE]->(dst:CPGNode) RETURN src.id AS source, r.edge_type AS edge_type, dst.id AS target LIMIT 5;",
+        "null_file_id_nodes": "MATCH (n:CPGNode) WHERE n.file_id IS NULL RETURN n.id AS node_id;",
+        "null_file_id_edges": "MATCH ()-[r:CPG_EDGE]->() WHERE r.file_id IS NULL RETURN r.edge_id AS edge_id;",
+        "null_generation_id_entities": "MATCH (n) WHERE (n:CPGNode OR n:CPGNodeTombstone) AND n.generation_id IS NULL RETURN id(n) AS entity_id;",
+        "tombstones": "MATCH (t:CPGNodeTombstone) RETURN t.id AS id, t.generation_id AS generation_id, t.file_id AS file_id LIMIT 10;",
     }
 
     report = {}
     for title, cypher in queries.items():
         rows = run_cypher(cypher, password)
-        # Separate headers and records if rows exist
         if rows:
             headers = rows[0]
-            records = [dict(zip(headers, row)) for row in rows[1:]]
+            records = []
+            for row in rows[1:]:
+                record = {}
+                for h, val in zip(headers, row):
+                    record[h] = cast_value(val)
+                records.append(record)
             report[title] = records
         else:
             report[title] = []
