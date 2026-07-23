@@ -59,7 +59,37 @@ Các topic được cấu hình bao gồm:
 - **Planned Kafka Connect DLQ topic**:
   - `connector.errors`: Dead Letter Queue chứa các sự kiện lỗi từ Kafka Connect (được cấu hình và kiểm chứng ở Task 4) (1 partition).
 
-### 3. Khởi chạy MongoDB (cho Task 5)
+
+### 3. Khởi chạy Neo4j & Kafka Connect (cho Task 4)
+
+Khởi chạy cơ sở dữ liệu đồ thị Neo4j và Kafka Connect container:
+
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml up -d neo4j kafka-connect
+```
+
+Sau khi dịch vụ khởi chạy, thực hiện các bước sau để thiết lập schema và nạp connector:
+
+1. **Khởi tạo Neo4j Schema (Constraints & Indexes)**:
+   ```bash
+   PYTHONPATH=src uv run python scripts/create_neo4j_schema.py
+   ```
+   Script này sẽ thiết lập ràng buộc duy nhất (`UNIQUE`) cho ID của Node, ID và thế hệ (`generation_id`) của Node/Edge Tombstones để đảm bảo an toàn ghi trùng lặp và chặn stale resurrection.
+
+2. **Deploy Kafka Connect Sinks**:
+   ```bash
+   export $(grep -v '^#' .env | xargs)
+   PYTHONPATH=src uv run python scripts/deploy_connectors.py
+   ```
+   Lệnh này tự động kiểm tra và cấu hình hai Sink Connectors: `neo4j-nodes-sink` và `neo4j-edges-sink`. Cấu hình bao gồm cơ chế bắt lỗi DLQ (`connector.errors`) và cơ chế batching.
+
+3. **Giám sát Dead Letter Queue (DLQ)**:
+   Để kiểm tra các bản ghi bị đẩy vào DLQ do lỗi không hợp lệ (như endpoint mismatch):
+   ```bash
+   PYTHONPATH=src uv run python scripts/inspect_kafka_events.py --start-offsets ...
+   ```
+
+### 4. Khởi chạy MongoDB (cho Task 5)
 
 ```bash
 docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb
