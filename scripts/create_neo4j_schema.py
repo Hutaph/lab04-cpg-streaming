@@ -65,9 +65,13 @@ def main() -> None:
     CREATE CONSTRAINT cpg_node_id_unique IF NOT EXISTS
     FOR (node:CPGNode) REQUIRE node.id IS UNIQUE;
 
-    // Enforce unique tombstone keys
+    // Enforce unique node tombstone keys
     CREATE CONSTRAINT cpg_tombstone_unique IF NOT EXISTS
     FOR (t:CPGNodeTombstone) REQUIRE (t.id, t.generation_id) IS UNIQUE;
+
+    // Enforce unique edge tombstone keys (prevents duplicate tombstones on replay)
+    CREATE CONSTRAINT cpg_edge_tombstone_unique IF NOT EXISTS
+    FOR (t:CPGEdgeTombstone) REQUIRE (t.id, t.generation_id) IS UNIQUE;
 
     // Index on file_id for quick querying/filtering
     CREATE INDEX file_id_idx IF NOT EXISTS

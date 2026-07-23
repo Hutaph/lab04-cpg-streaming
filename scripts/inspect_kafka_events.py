@@ -29,7 +29,7 @@ def load_schemas(schemas_dir: Path) -> dict[str, Draft202012Validator]:
     return schemas
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Consume CPG events from Kafka with offset scoping.")
     parser.add_argument("--start-offsets", help="Path to start offsets JSON file.")
     parser.add_argument("--end-offsets", help="Path to end offsets JSON file.")
@@ -96,7 +96,7 @@ def main():
     duplicate_event_ids = 0
     seen_event_ids = set()
     topic_counts = {t: 0 for t in topics}
-    partition_map = {}  # (topic, file_id) -> set of partitions
+    partition_map: dict[tuple[str | None, str | None], set[int]] = {}  # (topic, file_id) -> set of partitions
     has_parser_error = False
 
     print("Listening for messages... (will auto-stop after 5s of inactivity)")
@@ -109,7 +109,8 @@ def main():
                 continue
 
             if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
+                err = msg.error()
+                if err is not None and err.code() == KafkaError._PARTITION_EOF:
                     empty_polls += 1
                     continue
                 else:
@@ -119,8 +120,10 @@ def main():
             empty_polls = 0
 
             topic = msg.topic()
-            partition = msg.partition()
-            offset = msg.offset()
+            msg_partition = msg.partition()
+            msg_offset = msg.offset()
+            partition = msg_partition if msg_partition is not None else 0
+            offset = msg_offset if msg_offset is not None else 0
             key_bytes = msg.key()
             value_bytes = msg.value()
 
@@ -133,8 +136,8 @@ def main():
             consumed_count += 1
             topic_counts[topic] = topic_counts.get(topic, 0) + 1
 
-            key = key_bytes.decode("utf-8") if key_bytes else None
-            payload = json.loads(value_bytes.decode("utf-8"))
+            key = key_bytes.decode("utf-8") if key_bytes is not None else None
+            payload = json.loads(value_bytes.decode("utf-8") if value_bytes is not None else "{}")
             event_type = payload.get("event_type")
             file_id = payload.get("file_id")
             event_id = payload.get("event_id")
@@ -214,11 +217,12 @@ def main():
     print("\n=== Per-Topic Partition Consistency ===")
     partition_routing_ok = True
     for (t, fid), parts in sorted(partition_map.items()):
+        fid_preview = fid[:8] if fid is not None else "<None>"
         if len(parts) > 1:
-            print(f"[FAIL] topic={t}, file_id={fid[:8]}..., partitions={parts}")
+            print(f"[FAIL] topic={t}, file_id={fid_preview}..., partitions={parts}")
             partition_routing_ok = False
         else:
-            print(f"[PASS] topic={t}, file_id={fid[:8]}..., partitions={parts}")
+            print(f"[PASS] topic={t}, file_id={fid_preview}..., partitions={parts}")
 
     print("\n[INFO] Partition numbers are topic-local and are not compared across topics.")
     print("[INFO] This verification does not claim cross-topic ordering.")

@@ -80,6 +80,8 @@ def main() -> None:
         "null_file_id_edges": "MATCH ()-[r:CPG_EDGE]->() WHERE r.file_id IS NULL RETURN r.edge_id AS edge_id;",
         "null_generation_id_entities": "MATCH (n) WHERE (n:CPGNode OR n:CPGNodeTombstone) AND n.generation_id IS NULL RETURN id(n) AS entity_id;",
         "tombstones": "MATCH (t:CPGNodeTombstone) RETURN t.id AS id, t.generation_id AS generation_id, t.file_id AS file_id LIMIT 10;",
+        "edge_tombstones": "MATCH (t:CPGEdgeTombstone) RETURN t.id AS id, t.generation_id AS generation_id, t.file_id AS file_id LIMIT 10;",
+        "duplicate_edge_tombstones": "MATCH (t:CPGEdgeTombstone) WITH t.id AS id, t.generation_id AS gen, count(t) AS c WHERE c > 1 RETURN id, gen, c;",
     }
 
     report = {}
