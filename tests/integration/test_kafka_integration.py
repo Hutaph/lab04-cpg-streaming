@@ -1,6 +1,7 @@
 import os
 import pytest
 import json
+import time
 from pathlib import Path
 from confluent_kafka import Consumer
 from domain.errors import PublishError
@@ -282,7 +283,7 @@ def test_kafka_topic_routing_and_keys():
 
     conf = {
         "bootstrap.servers": bootstrap_servers,
-        "group.id": "test-kafka-routing-verifier-group",
+        "group.id": f"test-kafka-routing-verifier-group-{int(time.time())}",
         "auto.offset.reset": "earliest",
         "enable.auto.commit": "false",
     }
@@ -290,11 +291,12 @@ def test_kafka_topic_routing_and_keys():
     consumer = Consumer(conf)
     all_topics = ["cpg.nodes", "cpg.edges", "source.metadata", "parser.errors"]
     consumer.subscribe(all_topics)
+    time.sleep(3.0)  # Give coordinator time to assign partitions
 
     received_events = {}
 
     empty_polls = 0
-    while empty_polls < 5 and len(received_events) < len(events):
+    while empty_polls < 15 and len(received_events) < len(events):
         msg = consumer.poll(1.0)
         if msg is None:
             empty_polls += 1
@@ -305,7 +307,10 @@ def test_kafka_topic_routing_and_keys():
 
         topic = msg.topic()
         key = msg.key().decode("utf-8")
-        val = json.loads(msg.value().decode("utf-8"))
+        try:
+            val = json.loads(msg.value().decode("utf-8"))
+        except json.JSONDecodeError:
+            continue
 
         if key == test_file_id:
             received_events[topic] = val
@@ -358,17 +363,18 @@ def test_kafka_per_topic_partition_consistency():
 
     conf = {
         "bootstrap.servers": bootstrap_servers,
-        "group.id": "test-kafka-consistency-verifier-group",
+        "group.id": f"test-kafka-consistency-verifier-group-{int(time.time())}",
         "auto.offset.reset": "earliest",
         "enable.auto.commit": "false",
     }
 
     consumer = Consumer(conf)
     consumer.subscribe([test_topic])
+    time.sleep(3.0)  # Wait for coordinator partition assignment
 
     received_messages = []
     empty_polls = 0
-    while empty_polls < 5 and len(received_messages) < 5:
+    while empty_polls < 15 and len(received_messages) < 5:
         msg = consumer.poll(1.0)
         if msg is None:
             empty_polls += 1

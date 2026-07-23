@@ -200,24 +200,24 @@ Các giới hạn dưới đây được biết đến và chấp nhận trong p
 10. **Partition remapping**: Thay đổi partition count có thể ánh xạ cùng `file_id` sang partition khác.
 11. **Limited topic drift detection**: Topic provisioning hiện kiểm tra partition count và replication factor; không xác nhận toàn bộ Kafka topic configuration.
 12. **Synchronous processing assumption**: Processing flow hiện tại giả định single-process execution tuần tự.
-13. **Downstream idempotency not implemented**: Neo4j idempotent ingestion chưa được triển khai hoặc runtime verified (Task 4).
-14. **Stale-event protection not implemented**: Version/tombstone/staging/generation guards thuộc Task 4.
-15. **Kafka Connect DLQ not verified**: `connector.errors` là planned topic; Kafka Connect DLQ behavior chưa được runtime verified trong Task 3.
+13. **Downstream idempotency implemented and verified**: Neo4j idempotent ingestion đã được kiểm chứng đầy đủ qua các integration tests và notebook evidence sử dụng Cypher `MERGE` kết hợp ràng buộc unique ID.
+14. **Stale-event protection implemented**: Đã triển khai cơ chế Node và Edge Tombstones để lưu vết thế hệ đã bị xóa, ngăn chặn việc hồi sinh (resurrection) từ stale events cùng thế hệ.
+15. **Kafka Connect DLQ verified**: Đã cấu hình và kiểm chứng live topic `connector.errors` nhận các record lỗi mismatch endpoint, connector và tasks vẫn giữ trạng thái `RUNNING`.
 16. **Hard-kill cleanup limitation**: Python `try/finally` không chạy nếu process bị hard kill (`SIGKILL`); safe cleanup chỉ giảm nguy cơ để lại artifacts trong trường hợp bình thường.
 
 ### 5.3. Optional Future Considerations
 - **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.
 - **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
 
-### 5.4. Yêu cầu thiết kế cho Task 4 (Design Prerequisites)
-Neo4j Ingestion trong Task 4 phải được thiết kế và kiểm chứng với giả định rằng các event từ `cpg.nodes` và `cpg.edges` có thể được nhận theo thứ tự khác với luồng phát hành (logical publish order) của Parser Service.
-- **Order-tolerant ingestion.**
-  Xử lý đúng khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes. Không giả định node events luôn được connector xử lý trước edge events.
-- **Idempotent upsert và delete.**
-  Task 4 cần thiết kế Cypher `MERGE` dựa trên stable IDs và các uniqueness constraints phù hợp, sau đó kiểm chứng replay và concurrency behavior. Chỉ sử dụng `MERGE` không đủ để khẳng định ingestion đã idempotent.
-- **Stale-event protection.**
-  Task 4 phải đánh giá staging, guarded placeholders hoặc một cơ chế tương đương. Placeholder node chỉ được sử dụng nếu có generation/version guard ngăn stale edge events tái tạo dữ liệu đã bị xóa. Bản thân stable IDs không đủ để ngăn chặn tình trạng một upsert cũ hồi sinh dữ liệu đã bị một generation mới hơn xóa.
-- **Delete race handling.**
-  Thiết kế phải xử lý trường hợp `NODE_DELETE` và `EDGE_DELETE` được nhận khác thứ tự application publish, cũng như stale `EDGE_UPSERT` đến sau delete.
-- **Kafka Connect DLQ.**
-  Cấu hình `connector.errors` làm Kafka Connect dead-letter topic và kiểm chứng bằng một connector processing failure thực tế. Việc topic tồn tại không được xem là bằng chứng DLQ đã hoạt động.
+### 5.4. Yêu cầu thiết kế cho Task 4 (Đã hoàn thành)
+Neo4j Ingestion trong Task 4 đã được thiết kế và kiểm chứng đầy đủ với các kịch bản thực tế:
+- **Order-tolerant ingestion (Đã giải quyết):**
+  Cypher tự động tạo placeholder nodes khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes mà không bị lỗi.
+- **Idempotent upsert và delete (Đã giải quyết):**
+  Cypher sử dụng `MERGE` kết hợp uniqueness constraints đảm bảo replay không tạo trùng lặp hay duplicate nodes/edges/tombstones.
+- **Stale-event protection (Đã giải quyết):**
+  Đã triển khai hệ thống Tombstones lưu trữ `generation_id` dạng `file_id:content_hash:parser_version:schema_version`. `EDGE_UPSERT` và `NODE_UPSERT` bị chặn nếu tombstone cùng thế hệ tồn tại.
+- **Delete race handling (Đã giải quyết):**
+  `EDGE_DELETE` luôn tạo `CPGEdgeTombstone` dựa trên event fields bất kể relationship có tồn tại hay không, chặn hoàn toàn stale `EDGE_UPSERT` đến sau.
+- **Kafka Connect DLQ (Đã giải quyết):**
+  Cấu hình `connector.errors` làm DLQ và kiểm chứng live bằng lỗi endpoint mismatch. Các bản ghi hợp lệ trong batch bị ảnh hưởng bởi rollback giao dịch sẽ được ghi thành công sau khi gửi độc lập (replay/retry), còn record lỗi được đẩy vào DLQ thành công.

@@ -298,3 +298,11 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
 - **Bối cảnh**: Metadata thống kê của file cần được nạp vào MongoDB và cần đảm bảo không mất mát tin nhắn khi hệ thống gặp lỗi.
 - **Giải pháp**: Xây dựng job Spark Structured Streaming consume topic `source.metadata` kết hợp với `checkpointLocation` lưu offsets của Kafka.
 - **Hệ quả**: Khả năng chịu lỗi cao, tự động khôi phục và tiếp tục từ vị trí offsets đã xử lý gần nhất.
+
+### Quyết định 8: Giải pháp Replay-Safe và Tombstone trong Neo4j
+- **Bối cảnh**: Khi một file bị chỉnh sửa hoặc xóa, một số thực thể cũ (Nodes/Edges) sẽ bị xóa khỏi CPG. Tuy nhiên, nếu các sự kiện cũ trong Kafka được phát lại (replay), các lệnh `EDGE_UPSERT` và `NODE_UPSERT` cũ có thể vô tình tái tạo lại các thực thể đã bị xóa này, gây ra hiện tượng "hồi sinh thực thể stale" (stale resurrection).
+- **Giải pháp**:
+  * Khi thực hiện xóa thực thể Node (`NODE_DELETE`) hoặc Edge (`EDGE_DELETE`), hệ thống luôn tạo ra các bản ghi Tombstone (`CPGNodeTombstone` và `CPGEdgeTombstone`) gắn liền với định danh thế hệ `generation_id` (`file_id:content_hash:parser_version:schema_version`) từ sự kiện Kafka, không phụ thuộc vào việc thực thể đó có đang tồn tại trong Neo4j hay không.
+  * Trong các câu lệnh Cypher Sink, bổ sung điều kiện lọc kiểm tra sự tồn tại của Tombstone tương ứng trước khi tiến hành `MERGE` Node hoặc Edge. Thao tác UPSERT của thế hệ cũ sẽ bị bỏ qua nếu tombstone cùng thế hệ đã được ghi nhận.
+  * Đối với các bản ghi không hợp lệ hoặc lỗi định danh (như mismatch endpoint của edge), Kafka Connect được cấu hình đẩy sang Dead Letter Queue (`connector.errors`) thông qua `errors.tolerance = all`.
+  * **Hạn chế được chấp nhận (Accepted Limitation)**: Do Neo4j Kafka Sink Connector mặc định thực thi toàn bộ bản ghi trong cùng một batch window thành một transaction duy nhất, bất kỳ lỗi runtime nào của một bản ghi (ví dụ: endpoint mismatch gây ra lỗi chia cho 0) cũng sẽ khiến toàn bộ batch transaction bị rollback ở phía Neo4j. Connector vẫn tiếp tục chạy (`RUNNING`) và đẩy bản ghi lỗi sang DLQ (`connector.errors`), nhưng các bản ghi hợp lệ trong cùng batch đó sẽ bị mất và cần phải được replay/retry lại để ghi thành công.

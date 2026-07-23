@@ -10,7 +10,7 @@
 - **Tiến độ Hiện tại**:
   - **Task 1 & Task 2**: Đã triển khai và kiểm chứng cục bộ (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
   - **Task 3 (Kafka Ingestion)**: Đã triển khai và kiểm chứng trong phạm vi môi trường local (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh cấu trúc/phân vùng).
-  - **Task 4 & 6**: Đã scaffold cấu trúc cấu hình ban đầu; các công việc thiết kế và kiểm chứng tiếp theo thuộc phạm vi Task 4.
+  - **Task 4 (Neo4j Ingestion)**: Đã hoàn thành và kiểm chứng đầy đủ (Neo4j Kafka Sink Connector với Cypher FOREACH rẽ nhánh, cơ chế Node/Edge Tombstone chống stale resurrection, mixed-batch DLQ isolation, idempotent replay).
   - **Task 5**: Đã triển khai và xác minh pipeline Spark Structured Streaming ghi metadata vào MongoDB bằng Docker.
 
 ---

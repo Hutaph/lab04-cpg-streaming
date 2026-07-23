@@ -2,14 +2,23 @@
   "name": "neo4j-nodes-sink",
   "config": {
     "topics": "cpg.nodes",
-    "connector.class": "union.neo4j.kafka.connect.Neo4jSinkConnector",
+    "connector.class": "streams.kafka.connect.sink.Neo4jSinkConnector",
     "errors.deadletterqueue.topic.name": "connector.errors",
-    "errors.deadletterqueue.topic.replication.factor": 1,
+    "errors.deadletterqueue.topic.replication.factor": "1",
+    "errors.deadletterqueue.context.headers.enable": "true",
     "errors.tolerance": "all",
-    "neo4j.uri": "bolt://neo4j:7687",
+    "kafka.bootstrap.servers": "kafka:29092",
+    "neo4j.server.uri": "bolt://cpg-neo4j:7687",
     "neo4j.authentication.basic.username": "neo4j",
-    "neo4j.authentication.basic.password": "TODO_NEO4J_PASSWORD",
-    "neo4j.encryption.enabled": false,
-    "neo4j.topic.cypher.cpg.nodes": "MERGE (n:CodeNode {node_id: event.node_id}) ON CREATE SET n.node_type = event.node_type, n.name = event.name, n.qualified_name = event.qualified_name, n.file_path = event.file_path, n.line_start = event.line_start, n.column_start = event.column_start, n.line_end = event.line_end, n.column_end = event.column_end, n.properties = event.properties ON MATCH SET n.name = event.name, n.properties = event.properties"
+    "neo4j.authentication.basic.password": "${NEO4J_PASSWORD}",
+    "neo4j.encryption.enabled": "false",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "neo4j.batch.size": "100",
+    "neo4j.batch.timeout.msecs": "250",
+    "neo4j.connection.acquisition.timeout.msecs": "10000",
+    "neo4j.connection.liveness.check.timeout.msecs": "5000",
+    "neo4j.topic.cypher.cpg.nodes": "WITH event OPTIONAL MATCH (n_old:CPGNode {id: event.node.node_id}) FOREACH (x IN CASE WHEN event.event_type = 'NODE_UPSERT' THEN [1] ELSE [] END | MERGE (n:CPGNode {id: event.node.node_id}) ON CREATE SET n += coalesce(event.node.properties, {}), n.id = event.node.node_id, n.placeholder = false, n.node_type = event.node.node_type, n.name = event.node.name, n.qualified_name = event.node.qualified_name, n.ast_path = event.node.ast_path, n.line_start = event.node.line_start, n.column_start = event.node.column_start, n.line_end = event.node.line_end, n.column_end = event.node.column_end, n.repository_id = event.repository_id, n.commit_sha = event.commit_sha, n.file_path = event.file_path, n.file_id = event.file_id, n.parser_version = event.parser_version, n.schema_version = event.schema_version, n.content_hash = event.content_hash, n.generation_id = event.file_id + ':' + event.content_hash + ':' + event.parser_version + ':' + event.schema_version ON MATCH SET n += coalesce(event.node.properties, {}), n.id = event.node.node_id, n.placeholder = false, n.node_type = event.node.node_type, n.name = event.node.name, n.qualified_name = event.node.qualified_name, n.ast_path = event.node.ast_path, n.line_start = event.node.line_start, n.column_start = event.node.column_start, n.line_end = event.node.line_end, n.column_end = event.node.column_end, n.repository_id = event.repository_id, n.commit_sha = event.commit_sha, n.file_path = event.file_path, n.file_id = event.file_id, n.parser_version = event.parser_version, n.schema_version = event.schema_version, n.content_hash = event.content_hash, n.generation_id = event.file_id + ':' + event.content_hash + ':' + event.parser_version + ':' + event.schema_version) FOREACH (x IN CASE WHEN event.event_type = 'NODE_DELETE' AND n_old IS NOT NULL AND n_old.generation_id = event.file_id + ':' + event.content_hash + ':' + event.parser_version + ':' + event.schema_version THEN [1] ELSE [] END | MERGE (t:CPGNodeTombstone {id: n_old.id, generation_id: n_old.generation_id}) ON CREATE SET t.file_id = n_old.file_id) FOREACH (x IN CASE WHEN event.event_type = 'NODE_DELETE' AND n_old IS NOT NULL AND n_old.generation_id = event.file_id + ':' + event.content_hash + ':' + event.parser_version + ':' + event.schema_version THEN [1] ELSE [] END | DETACH DELETE n_old)"
   }
 }

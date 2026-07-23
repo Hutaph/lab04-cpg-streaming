@@ -17,6 +17,7 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 - **[Task 1: Clone và khám phá repository](task1_clone_explore.ipynb)**: Thực hiện shallow clone, xác định git commit hash và khảo sát cấu trúc thư mục, thống kê danh sách file Python nguồn.
 - **[Task 2: Incremental CPG Parser Service](task2_parser_service.ipynb)**: Triển khai CPG Parser phân tích AST, CFG, DFG, Call graph, sinh stable ID ổn định và chạy dry-run JSONL.
 - **[Task 3: Kafka Topic Design](task3_kafka_topics.ipynb)**: Cấu hình broker, khởi tạo topic, publish events lên Kafka với key là `file_id` và xác minh schema, partition consistency, parser error flow.
+- **[Task 4: Neo4j Kafka Sink Connector](task4_neo4j_sink.ipynb)**: Cấu hình Kafka Connect Sink đưa đồ thị CPG vào Neo4j, xử lý an toàn replay thông qua Cypher subqueries, map-merge properties, stale deletion guard và Dead Letter Queue.
 - **[Task 5: Source Metadata Ingestion into MongoDB](task5_spark_mongodb.ipynb)**: Chạy Spark Structured Streaming đọc metadata từ Kafka, ghi MongoDB, kiểm tra checkpoint resume và upsert khi replay.
 - **[Task 6: Idempotent Replay Verification](task6_idempotent_replay.ipynb)**: Kiểm chứng replay tăng dần qua stable IDs, graph diff, Neo4j idempotent writes, MongoDB upsert và Spark checkpoint.
 
@@ -27,7 +28,7 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 - **Task 2 (Parser Service)**: Hoàn thành (Verified).
 - **Task 3 (Kafka Integration)**: Hoàn thành (Verified).
 - **Task 4 (Neo4j Graph Ingestion)**: Hoàn thành (Verified).
-- **Task 5 (Spark/MongoDB)**: Đã triển khai và xác minh end-to-end bằng Docker.
+- **Task 5 (Spark/MongoDB)**: Hoàn thành (Verified).
 - **Task 6 (Idempotent Replay)**: Hoàn thành (Verified).
 
 Để tái hiện kiểm thử Task 5, chạy các lệnh trong [infra/README.md](../infra/README.md)

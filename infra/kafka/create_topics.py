@@ -122,7 +122,7 @@ def main():
     print("Creating and validating topics...")
     for msg in log_messages:
         if msg.startswith("MISSING:"):
-            _, name, parts, rep = msg.split(":")[-1].split(",")
+            name, parts, rep = msg.split(":")[-1].split(",")
             print(f"Creating topic '{name}' (partitions: {parts}, replication factor: {rep})...")
             create_res = run_cmd(
                 [
