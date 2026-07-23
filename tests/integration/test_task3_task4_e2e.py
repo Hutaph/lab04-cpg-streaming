@@ -54,7 +54,7 @@ def test_task3_task4_end_to_end_flow(e2e_temp_git_repo, env_vars: dict[str, str]
 
     # Clean up any potential leftover entities for e2e repo prefix
     run_cypher_query(
-        "MATCH (n:CPGNode) WHERE n.repository_id = 'e2e_repo' WITH collect(n.file_id) AS file_ids MATCH (t:CPGNodeTombstone) WHERE t.file_id IN file_ids DETACH DELETE t;",
+        "MATCH (n:CPGNode) WHERE n.repository_id = 'e2e_repo' WITH collect(n.file_id) AS file_ids OPTIONAL MATCH (t1:CPGNodeTombstone) WHERE t1.file_id IN file_ids OPTIONAL MATCH (t2:CPGEdgeTombstone) WHERE t2.file_id IN file_ids DETACH DELETE t1, t2;",
         password,
     )
     run_cypher_query("MATCH (n:CPGNode) WHERE n.repository_id = 'e2e_repo' DETACH DELETE n;", password)
