@@ -1,6 +1,7 @@
 import csv
 import subprocess
 import sys
+import time
 import pytest
 from pathlib import Path
 from confluent_kafka import Producer
@@ -45,6 +46,28 @@ def run_cypher_query(query: str, password: str) -> list[list[str]]:
     except Exception as exc:
         print(f"Failed to run cypher: {exc}", file=sys.stderr)
         return []
+
+
+def poll_neo4j_count(query: str, expected: str, password: str, timeout: float = 15.0) -> list[list[str]]:
+    """Poll Neo4j until count row matches expected value or timeout is reached.
+
+    Args:
+        query: Cypher query that returns exactly one count row (``RETURN count(...)``).
+        expected: The expected string value of ``results[1][0]``.
+        password: Neo4j password.
+        timeout: Maximum seconds to poll before returning last result.
+
+    Returns:
+        Last result from ``run_cypher_query``.
+    """
+    deadline = time.monotonic() + timeout
+    result: list[list[str]] = []
+    while time.monotonic() < deadline:
+        result = run_cypher_query(query, password)
+        if len(result) >= 2 and result[1][0] == expected:
+            return result
+        time.sleep(0.5)
+    return result
 
 
 @pytest.fixture(scope="module")
