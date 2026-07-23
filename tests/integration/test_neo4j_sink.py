@@ -755,3 +755,417 @@ def test_edge_endpoint_mismatch_fails_to_dlq(kafka_producer: Producer, env_vars:
     assert status.get("tasks", [{}])[0].get("state") == "RUNNING"
 
     consumer.close()
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+@pytest.mark.kafka_connect
+def test_edge_resurrection_protection(kafka_producer: Producer, neo4j_password: str):
+    """Verify that replaying a stale EDGE_UPSERT after EDGE_DELETE does not recreate the edge.
+
+    Scenario:
+    1. Create nodes A and B.
+    2. Create edge E with generation G.
+    3. Delete edge E (EDGE_DELETE generation G) → edge tombstone created.
+    4. Replay stale EDGE_UPSERT E generation G.
+    5. Assert edge E is absent.
+    6. Assert exactly one edge tombstone exists for (edge_id, generation G).
+    """
+    node_topic = "cpg.nodes"
+    edge_topic = "cpg.edges"
+    file_id = "test_edge_resurrection_file_id"
+    edge_id = "resurrect_edge_id_1"
+    src_id = "resurrect_edge_src_1"
+    dst_id = "resurrect_edge_dst_1"
+    content_hash = "resurrect_gen_hash_1"
+    generation_id = f"{file_id}:{content_hash}:1.0.0:1.0"
+
+    # Pre-clean
+    run_cypher_query(
+        f"MATCH (n:CPGNode) WHERE n.id IN ['{src_id}', '{dst_id}'] DETACH DELETE n;",
+        neo4j_password,
+    )
+    run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}'}}) DELETE t;",
+        neo4j_password,
+    )
+
+    # 1. Create nodes A and B (real hydrated nodes, not placeholders)
+    for nid, nname in [(src_id, "NodeA"), (dst_id, "NodeB")]:
+        node_evt = {
+            "schema_version": "1.0",
+            "event_id": f"evt_eres_n_{nid}",
+            "event_type": "NODE_UPSERT",
+            "event_time": "2026-07-22T10:00:00Z",
+            "repository_id": "test_repo",
+            "commit_sha": "sha_eres",
+            "file_id": file_id,
+            "file_path": "a.py",
+            "content_hash": content_hash,
+            "parser_version": "1.0.0",
+            "node": {
+                "node_id": nid,
+                "node_type": "Name",
+                "name": nname,
+                "qualified_name": nname,
+                "ast_path": "Module",
+                "line_start": 1,
+                "column_start": 0,
+                "line_end": 1,
+                "column_end": 5,
+                "properties": {},
+            },
+        }
+        kafka_producer.produce(node_topic, key=file_id, value=json.dumps(node_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # 2. Create edge E generation G
+    edge_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_eres_e_up_1",
+        "event_type": "EDGE_UPSERT",
+        "event_time": "2026-07-22T10:01:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_eres",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": content_hash,
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "AST_CHILD",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Confirm edge exists
+    res_edge = run_cypher_query(
+        f"MATCH ()-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->() RETURN count(r);",
+        neo4j_password,
+    )
+    assert res_edge[1][0] == "1", "Edge should exist after EDGE_UPSERT"
+
+    # 3. EDGE_DELETE E generation G → edge tombstone created
+    delete_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_eres_e_del_1",
+        "event_type": "EDGE_DELETE",
+        "event_time": "2026-07-22T10:02:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_eres",
+        "file_id": file_id,
+        "file_path": "a.py",
+        "content_hash": content_hash,
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "AST_CHILD",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(delete_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Confirm edge is gone
+    res_del = run_cypher_query(
+        f"MATCH ()-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->() RETURN count(r);",
+        neo4j_password,
+    )
+    assert res_del[1][0] == "0", "Edge should be deleted after EDGE_DELETE"
+
+    # Confirm edge tombstone exists exactly once
+    res_tomb = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_tomb[1][0] == "1", "Edge tombstone should be created on EDGE_DELETE"
+
+    # 4. Replay stale EDGE_UPSERT E generation G → should NOT recreate edge
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Assert edge remains absent
+    res_resurrected = run_cypher_query(
+        f"MATCH ()-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->() RETURN count(r);",
+        neo4j_password,
+    )
+    assert res_resurrected[1][0] == "0", "Stale EDGE_UPSERT must NOT resurrect deleted edge"
+
+    # Assert tombstone still exactly one (no duplicate)
+    res_tomb_post = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_tomb_post[1][0] == "1", "Edge tombstone must remain exactly one after stale replay"
+
+    # Nodes A and B must still exist
+    res_nodes = run_cypher_query(
+        f"MATCH (n:CPGNode) WHERE n.id IN ['{src_id}', '{dst_id}'] RETURN count(n);",
+        neo4j_password,
+    )
+    assert res_nodes[1][0] == "2", "Endpoint nodes must survive edge deletion"
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+@pytest.mark.kafka_connect
+def test_edge_new_generation_after_tombstone(kafka_producer: Producer, neo4j_password: str):
+    """Verify that a new-generation EDGE_UPSERT is not blocked by an old-generation tombstone.
+
+    Scenario:
+    1. Create edge E generation G → delete → tombstone created.
+    2. Publish EDGE_UPSERT E with generation G2 (different content_hash).
+    3. Assert edge E with generation G2 exists.
+    4. Assert tombstone for G is still present.
+    5. Assert no tombstone for G2 (G2 is alive).
+    """
+    node_topic = "cpg.nodes"
+    edge_topic = "cpg.edges"
+    file_id = "test_edge_newgen_file_id"
+    edge_id = "newgen_edge_id_1"
+    src_id = "newgen_src_1"
+    dst_id = "newgen_dst_1"
+    content_hash_g1 = "newgen_hash_g1"
+    content_hash_g2 = "newgen_hash_g2"
+    generation_id_g1 = f"{file_id}:{content_hash_g1}:1.0.0:1.0"
+    generation_id_g2 = f"{file_id}:{content_hash_g2}:1.0.0:1.0"
+
+    # Pre-clean
+    run_cypher_query(
+        f"MATCH (n:CPGNode) WHERE n.id IN ['{src_id}', '{dst_id}'] DETACH DELETE n;",
+        neo4j_password,
+    )
+    run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}'}}) DELETE t;",
+        neo4j_password,
+    )
+
+    # Create nodes A and B
+    for nid, nname in [(src_id, "SrcNG"), (dst_id, "DstNG")]:
+        node_evt = {
+            "schema_version": "1.0",
+            "event_id": f"evt_ng_n_{nid}",
+            "event_type": "NODE_UPSERT",
+            "event_time": "2026-07-22T10:00:00Z",
+            "repository_id": "test_repo",
+            "commit_sha": "sha_ng",
+            "file_id": file_id,
+            "file_path": "b.py",
+            "content_hash": content_hash_g1,
+            "parser_version": "1.0.0",
+            "node": {
+                "node_id": nid,
+                "node_type": "Name",
+                "name": nname,
+                "qualified_name": nname,
+                "ast_path": "Module",
+                "line_start": 1,
+                "column_start": 0,
+                "line_end": 1,
+                "column_end": 5,
+                "properties": {},
+            },
+        }
+        kafka_producer.produce(node_topic, key=file_id, value=json.dumps(node_evt))
+    kafka_producer.flush()
+    time.sleep(3.0)
+
+    # Create edge generation G1
+    edge_g1 = {
+        "schema_version": "1.0",
+        "event_id": "evt_ng_e_g1",
+        "event_type": "EDGE_UPSERT",
+        "event_time": "2026-07-22T10:01:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_ng",
+        "file_id": file_id,
+        "file_path": "b.py",
+        "content_hash": content_hash_g1,
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "DFG_DEF_USE",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_g1))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Delete edge G1
+    delete_g1 = dict(edge_g1)
+    delete_g1["event_id"] = "evt_ng_e_del_g1"
+    delete_g1["event_type"] = "EDGE_DELETE"
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(delete_g1))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Confirm G1 tombstone
+    res_t1 = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id_g1}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_t1[1][0] == "1", "G1 tombstone must exist after G1 deletion"
+
+    # Publish EDGE_UPSERT E generation G2 (new content_hash)
+    edge_g2 = dict(edge_g1)
+    edge_g2["event_id"] = "evt_ng_e_g2"
+    edge_g2["content_hash"] = content_hash_g2
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_g2))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Edge G2 must exist
+    res_g2 = run_cypher_query(
+        f"MATCH ()-[r:CPG_EDGE {{edge_id: '{edge_id}'}}]->() RETURN r.generation_id;",
+        neo4j_password,
+    )
+    assert len(res_g2) == 2, "Edge G2 must be created"
+    assert res_g2[1][0] == generation_id_g2, "Edge must carry generation G2"
+
+    # G1 tombstone still present
+    res_t1_post = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id_g1}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_t1_post[1][0] == "1", "G1 tombstone must survive new-generation creation"
+
+    # No G2 tombstone (G2 is alive)
+    res_t2 = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id_g2}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_t2[1][0] == "0", "G2 must not have a tombstone (it is alive)"
+
+
+@pytest.mark.neo4j
+@pytest.mark.kafka
+@pytest.mark.kafka_connect
+def test_edge_delete_replay_safety(kafka_producer: Producer, neo4j_password: str):
+    """Verify that replaying an EDGE_DELETE after tombstone is created is idempotent.
+
+    Scenario:
+    1. Create edge E generation G.
+    2. Send EDGE_DELETE → tombstone created, edge deleted.
+    3. Replay EDGE_DELETE again.
+    4. Assert exactly one tombstone.
+    5. Assert connector and task are still RUNNING.
+    """
+    node_topic = "cpg.nodes"
+    edge_topic = "cpg.edges"
+    file_id = "test_edge_del_replay_file_id"
+    edge_id = "del_replay_edge_id_1"
+    src_id = "del_replay_src_1"
+    dst_id = "del_replay_dst_1"
+    content_hash = "del_replay_hash"
+    generation_id = f"{file_id}:{content_hash}:1.0.0:1.0"
+
+    # Pre-clean
+    run_cypher_query(
+        f"MATCH (n:CPGNode) WHERE n.id IN ['{src_id}', '{dst_id}'] DETACH DELETE n;",
+        neo4j_password,
+    )
+    run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}'}}) DELETE t;",
+        neo4j_password,
+    )
+
+    # Create nodes
+    for nid, nname in [(src_id, "SrcDR"), (dst_id, "DstDR")]:
+        node_evt = {
+            "schema_version": "1.0",
+            "event_id": f"evt_dr_n_{nid}",
+            "event_type": "NODE_UPSERT",
+            "event_time": "2026-07-22T10:00:00Z",
+            "repository_id": "test_repo",
+            "commit_sha": "sha_dr",
+            "file_id": file_id,
+            "file_path": "c.py",
+            "content_hash": content_hash,
+            "parser_version": "1.0.0",
+            "node": {
+                "node_id": nid,
+                "node_type": "Name",
+                "name": nname,
+                "qualified_name": nname,
+                "ast_path": "Module",
+                "line_start": 1,
+                "column_start": 0,
+                "line_end": 1,
+                "column_end": 5,
+                "properties": {},
+            },
+        }
+        kafka_producer.produce(node_topic, key=file_id, value=json.dumps(node_evt))
+    kafka_producer.flush()
+    time.sleep(3.0)
+
+    # Create edge
+    edge_evt = {
+        "schema_version": "1.0",
+        "event_id": "evt_dr_e_up",
+        "event_type": "EDGE_UPSERT",
+        "event_time": "2026-07-22T10:01:00Z",
+        "repository_id": "test_repo",
+        "commit_sha": "sha_dr",
+        "file_id": file_id,
+        "file_path": "c.py",
+        "content_hash": content_hash,
+        "parser_version": "1.0.0",
+        "edge": {
+            "edge_id": edge_id,
+            "source_id": src_id,
+            "target_id": dst_id,
+            "edge_type": "CFG_NEXT",
+            "properties": {},
+        },
+    }
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # First EDGE_DELETE
+    delete_evt = dict(edge_evt)
+    delete_evt["event_id"] = "evt_dr_e_del_1"
+    delete_evt["event_type"] = "EDGE_DELETE"
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(delete_evt))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    res_t1 = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_t1[1][0] == "1", "Tombstone must exist after first EDGE_DELETE"
+
+    # Replay EDGE_DELETE (idempotent)
+    delete_evt2 = dict(delete_evt)
+    delete_evt2["event_id"] = "evt_dr_e_del_2"
+    kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(delete_evt2))
+    kafka_producer.flush()
+    time.sleep(3.5)
+
+    # Tombstone still exactly one
+    res_t2 = run_cypher_query(
+        f"MATCH (t:CPGEdgeTombstone {{id: '{edge_id}', generation_id: '{generation_id}'}}) RETURN count(t);",
+        neo4j_password,
+    )
+    assert res_t2[1][0] == "1", "Tombstone must remain exactly one after replayed EDGE_DELETE"
+
+    # Connector still RUNNING
+    code, status = deploy_connectors.make_request("http://localhost:8083/connectors/neo4j-edges-sink/status")
+    assert code == 200
+    assert status.get("connector", {}).get("state") == "RUNNING"
+    assert status.get("tasks", [{}])[0].get("state") == "RUNNING"

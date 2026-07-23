@@ -1,3 +1,5 @@
+import csv
+import subprocess
 import sys
 import pytest
 from pathlib import Path
@@ -8,6 +10,41 @@ scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 sys.path.append(str(scripts_dir))
 
 import deploy_connectors  # noqa: E402
+
+
+def run_cypher_query(query: str, password: str) -> list[list[str]]:
+    """Shared helper: run a Cypher query inside cpg-neo4j container and return parsed rows."""
+    try:
+        res = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-i",
+                "cpg-neo4j",
+                "cypher-shell",
+                "-u",
+                "neo4j",
+                "-p",
+                password,
+                "--format",
+                "plain",
+            ],
+            input=query,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        lines = res.stdout.strip().splitlines()
+        results = []
+        reader = csv.reader(lines, skipinitialspace=True)
+        for row in reader:
+            if row:
+                normalized_row = [val.lower() if val in ("TRUE", "FALSE") else val for val in row]
+                results.append(normalized_row)
+        return results
+    except Exception as exc:
+        print(f"Failed to run cypher: {exc}", file=sys.stderr)
+        return []
 
 
 @pytest.fixture(scope="module")

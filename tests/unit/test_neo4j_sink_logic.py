@@ -26,21 +26,29 @@ def test_load_env() -> None:
 
 
 def test_generation_id_determinism() -> None:
-    """Verify compute_generation_id behaves deterministically and is sensitive to all inputs."""
+    """Verify build_generation_id is deterministic and sensitive to all four inputs.
+
+    The canonical generation_id is a colon-separated string — NOT a hash.
+    The returned value must exactly match what the Neo4j Connector Cypher stores.
+    """
     import generation_helper
 
-    g1 = generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "1.0")
-    g2 = generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "1.0")
-    # Same inputs yield identical hash
+    # Same inputs → identical string
+    g1 = generation_helper.build_generation_id("file_1", "hash_1", "1.0.0", "1.0")
+    g2 = generation_helper.build_generation_id("file_1", "hash_1", "1.0.0", "1.0")
     assert g1 == g2
 
-    # Verify input drift produces different hashes
-    assert g1 != generation_helper.compute_generation_id("file_2", "hash_1", "1.0.0", "1.0")
-    assert g1 != generation_helper.compute_generation_id("file_1", "hash_2", "1.0.0", "1.0")
-    assert g1 != generation_helper.compute_generation_id("file_1", "hash_1", "2.0.0", "1.0")
-    assert g1 != generation_helper.compute_generation_id("file_1", "hash_1", "1.0.0", "2.0")
+    # Exact canonical format must match Cypher connector storage
+    assert g1 == "file_1:hash_1:1.0.0:1.0"
 
-    # Unicode determinism check
-    u1 = generation_helper.compute_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
-    u2 = generation_helper.compute_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
+    # Each input field independently changes the generation identifier
+    assert g1 != generation_helper.build_generation_id("file_2", "hash_1", "1.0.0", "1.0")
+    assert g1 != generation_helper.build_generation_id("file_1", "hash_2", "1.0.0", "1.0")
+    assert g1 != generation_helper.build_generation_id("file_1", "hash_1", "2.0.0", "1.0")
+    assert g1 != generation_helper.build_generation_id("file_1", "hash_1", "1.0.0", "2.0")
+
+    # Unicode inputs produce stable canonical strings
+    u1 = generation_helper.build_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
+    u2 = generation_helper.build_generation_id("file_⚡", "hash_☃", "1.0.0-🎨", "1.0-🚀")
     assert u1 == u2
+    assert u1 == "file_⚡:hash_☃:1.0.0-🎨:1.0-🚀"

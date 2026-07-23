@@ -14,7 +14,7 @@ from application.services.process_file import ProcessFileService
 from infrastructure.filesystem.git_source_repository import GitSourceRepository
 from domain.models import SourceFile
 from domain.enums import ParseStatus
-from tests.integration.test_neo4j_sink import run_cypher_query
+from conftest import run_cypher_query
 
 
 def wait_for_neo4j_count(query: str, expected_count: int, password: str, timeout: float = 15.0) -> list[list[str]]:
