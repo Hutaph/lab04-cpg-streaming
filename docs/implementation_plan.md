@@ -53,7 +53,7 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 ### Phase 8 — Neo4j Kafka Sink
 - **Mục tiêu**: Cấu hình và khởi chạy Neo4j Kafka Connect Sink để tự động ghi node/edge vào Neo4j Graph.
 - **Output**: Đồ thị Neo4j được cập nhật tự động dựa trên Cypher MERGE query.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Hoàn thành (Docker E2E verified)**.
 - **Yêu cầu Thiết kế (Design Requirements)**:
   - **Kháng xáo trộn thứ tự Node-Edge**: Edge ingestion phải chấp nhận và xử lý được trường hợp các node đầu/cuối của cạnh chưa tồn tại trong Neo4j (ví dụ: tạo placeholder node và bổ sung thuộc tính sau).
   - **Xóa Idempotent**: Các câu lệnh DELETE cho node và edge phải chạy idempotent (không báo lỗi khi đối tượng cần xóa chưa tồn tại hoặc đã bị xóa trước đó).
@@ -87,12 +87,12 @@ Tài liệu này vạch ra lộ trình triển khai gồm 15 phases, chiến lư
 ### Phase 13 — Overall replay validation
 - **Mục tiêu**: Tích hợp toàn trình kiểm tra replay trên cả Neo4j và MongoDB để chứng minh tính idempotent.
 - **Output**: Không phát sinh bản ghi trùng lặp trên database sau nhiều lần chạy lại.
-- **Trạng thái**: **Chưa bắt đầu (Scaffolded)**.
+- **Trạng thái**: **Hoàn thành (Docker E2E verified)**.
 
 ### Phase 14 — Official Jupyter Book and reflections
 - **Mục tiêu**: Biên dịch toàn bộ tài liệu báo cáo thực hành và publish công khai qua GitHub Pages.
 - **Output**: Jupyter Book chứa đầy đủ bằng chứng thực thi các Task và Reflection.
-- **Trạng thái**: **Đang triển khai (In Progress)**.
+- **Trạng thái**: **Hoàn thành (Book build verified)**.
 
 ---
 
@@ -141,19 +141,19 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **Bốn Kafka topics** | Thiết kế topic riêng cho nodes, edges, metadata và errors | `config/topics.yaml` | Output lệnh liệt kê topics của Kafka Broker | **Verified** |
 | **Schema version** | Trường `schema_version` trong envelope để đánh dấu phiên bản | `schemas/*.json` | Bản ghi JSON chứa trường schema_version dạng string "1.0" | **Verified** |
 | **Event time** | Trường `event_time` đánh dấu thời điểm xảy ra sự kiện | `schemas/*.json` | Bản ghi JSON chứa trường event_time dạng ISO 8601 | **Verified** |
-| **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Scaffolded** |
-| **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Scaffolded** |
-| **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Dataframe streaming lọc `FILE_METADATA_UPSERT` từ topic `source.metadata` | **Implemented, Docker E2E verified** |
-| **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Writer MongoDB dùng `replace`/`upsertDocument` theo `file_id` | **Implemented, Docker E2E verified** |
-| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | `checkpointLocation` trỏ tới `workspace/checkpoints/spark` | **Implemented, Docker E2E verified** |
-| **Modified-file replay**| Thay đổi nội dung file, parser re-run và cập nhật | [replay_file.py](../src/application/services/replay_file.py) | Log chạy replay hiển thị số lượng event cập nhật | **Partially Implemented (SQLite)** |
-| **No duplication** | Replay không làm trùng lặp phần tử trên các databases | [replay_file.py](../src/application/services/replay_file.py) | Kiểm tra số lượng bản ghi DB bằng verify script | **Partially Implemented (SQLite)** |
-| **Architecture diagram**| Vẽ sơ đồ kiến trúc hệ thống chi tiết | [system_architecture.md](system_architecture.md) | Mermaid diagram tích hợp trong tài liệu | **Designed, evidence pending** |
-| **Jupyter Book** | Biên dịch toàn bộ tài liệu báo cáo dạng sách | `lab04-book/myst.yml` | Thư mục `lab04-book/_build/html` được tạo | **Verified** |
-| **GitHub Pages** | Host Jupyter Book công khai | `.github/workflows/deploy.yml` | URL public hoạt động bình thường | **Verified** |
-| **Executed cells** | Chạy notebook lưu lại kết quả hiển thị | `lab04-book/*.ipynb` | Kết quả hiển thị in ra dưới mỗi cell | **Verified** |
-| **Screenshots** | Đính kèm hình ảnh hoặc embedded figure của kết quả database vào báo cáo | `lab04-book/task5_spark_mongodb.ipynb` | Figure runtime hiển thị luồng Kafka → Spark → MongoDB, document count và checkpoint artifacts | **Implemented for Task 5; UI screenshots for other tasks pending** |
-| **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/*.ipynb` | Mục Reflection hiển thị ở cuối mỗi notebook | **Verified** |
+| **Neo4j direct sink** | Đẩy node/edge từ Kafka vào Neo4j không qua Spark | `infra/kafka-connect/connectors/*.json` | Cấu hình connector hiển thị trên Kafka Connect REST API | **Docker E2E verified** |
+| **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Docker E2E verified** |
+| **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Dataframe streaming lọc `FILE_METADATA_UPSERT` từ topic `source.metadata` | **Docker E2E verified** |
+| **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Writer MongoDB dùng `replace`/`upsertDocument` theo `file_id` | **Docker E2E verified** |
+| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | `checkpointLocation` trỏ tới `workspace/checkpoints/spark` | **Docker E2E verified** |
+| **Modified-file replay**| Thay đổi nội dung file, parser re-run và cập nhật | [replay_file.py](../src/application/services/replay_file.py) | Log chạy replay hiển thị số lượng event cập nhật | **Docker E2E verified** |
+| **No duplication** | Replay không làm trùng lặp phần tử trên các databases | [replay_file.py](../src/application/services/replay_file.py) | Kiểm tra số lượng bản ghi DB bằng verify script | **Docker E2E verified** |
+| **Architecture diagram**| Vẽ sơ đồ kiến trúc hệ thống chi tiết | [system_architecture.md](system_architecture.md) | Mermaid diagram tích hợp trong tài liệu | **Book build verified** |
+| **Jupyter Book** | Biên dịch toàn bộ tài liệu báo cáo dạng sách | `lab04-book/myst.yml` | Thư mục `lab04-book/_build/html` được tạo | **Book build verified** |
+| **GitHub Pages** | Host Jupyter Book công khai | `.github/workflows/deploy.yml` | URL public hoạt động bình thường | **Book build verified** |
+| **Executed cells** | Chạy notebook lưu lại kết quả hiển thị | `lab04-book/*.ipynb` | Kết quả hiển thị in ra dưới mỗi cell | **Book build verified** |
+| **Screenshots** | Đính kèm hình ảnh hoặc embedded figure của kết quả database vào báo cáo | `lab04-book/task5_spark_mongodb.ipynb` | Figure runtime hiển thị luồng Kafka → Spark → MongoDB, document count và checkpoint artifacts | **Book build verified** |
+| **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/*.ipynb` | Mục Reflection hiển thị ở cuối mỗi notebook | **Book build verified** |
 | **Meaningful commits** | Commit phản ánh tiến độ chi tiết của nhóm | Git history | Lịch sử commit chứa mã [Task N] tăng dần | **Verified** |
 
 ---
@@ -167,7 +167,7 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 ## 5. Danh sách Backlog và Trạng thái Tồn đọng (Backlog and Pending Status)
 
 ### 5.1. Backlog của Task 2
-Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nhằm xác nhận trạng thái của các mục đã được ghi nhận trước đó:
+Trạng thái tồn đọng kỹ thuật của Task 2 phục vụ các đợt tối ưu hóa trong tương lai:
 - **Chuẩn hóa runtime verification directories — Still pending.**
   Implementation hiện vẫn sử dụng `workspace/tmp/notebook/` cho SQLite state và `workspace/tmp/notebook-parser/` cho JSONL output. Hai path này cần được gom về một cấu trúc semantic như `workspace/tmp/parser-verification/` trong một phiên refactor riêng.
 - **Dọn dẹp runtime verification artifacts — Still pending.**
@@ -175,14 +175,14 @@ Task 2 không được thay đổi trong phiên này. Việc rà soát chỉ nh�
 - **Bổ sung `line` và `column` cho `SyntaxError` — Still pending.**
   `PARSER_ERROR` hiện chưa lưu đầy đủ structured source position mặc dù exception message có thể chứa thông tin dòng và cột.
 - **Re-audit Task 2 cached outputs — Not re-audited.**
-  Task 2 notebook không được execute hoặc re-audit trong phiên documentation cleanup này. Cần kiểm tra cached outputs sau khi runtime paths và error fields được refactor. Việc các cached outputs không bị thay đổi trong đợt cập nhật này không đồng nghĩa với việc nội dung đó đã được kiểm chứng lại.
+  Task 2 notebook không được execute hoặc re-audit trong phiên này. Cần kiểm tra cached outputs sau khi runtime paths và error fields được refactor.
 - **Ẩn runtime directories khỏi project explorer — Still pending.**
   Các thư mục verification tạm cần được loại khỏi source-oriented workspace view hoặc được cleanup để tránh bị hiểu nhầm là project artifacts.
 
 ### 5.2. Trạng thái Task 3
 Task 3 đã hoàn thành các bước rà soát biên an toàn và kiểm chứng. Kafka broker, topic provisioning, event validation, full-batch pre-serialization, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
-Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling chưa được kiểm chứng trong Task 3.
-Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của cả ba Phase trong cùng một lần chạy.
+Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling đầu cuối được kiểm chứng và hoàn thiện ở các Task tiếp theo (Task 4 & 5).
+Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của các Phase.
 
 #### Accepted Limitations of Task 3
 

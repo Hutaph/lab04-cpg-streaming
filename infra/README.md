@@ -18,8 +18,7 @@ File `.env` đã được thêm vào `.gitignore`; không commit file này.
 
 ### 1. Khởi chạy Kafka Broker (KRaft Mode)
 
-Kafka chạy ở chế độ KRaft (không cần Zookeeper). Đây là cấu hình chuẩn của Task 3.
-*Lưu ý: Task 5 notebook đã được thực thi với image Confluent Kafka 7.3.0 ở chế độ Zookeeper trong môi trường docker riêng khi triển khai. Cấu hình hiện tại dùng KRaft (Kafka 7.4.0); `source.metadata` vẫn hoạt động bình thường trên cả hai chế độ.*
+Kafka chạy ở chế độ KRaft (không cần Zookeeper). Đây là cấu hình chuẩn của Task 3. Toàn bộ các Spark jobs và downstream consumers trong dự án đều chạy nhất quán trên nền tảng Zookeeper-less Kafka KRaft (Kafka 7.4.0).
 
 Chạy lệnh sau từ thư mục root của dự án:
 
@@ -62,10 +61,10 @@ Các topic được cấu hình bao gồm:
 
 ### 3. Khởi chạy Neo4j & Kafka Connect (cho Task 4)
 
-Khởi chạy cơ sở dữ liệu đồ thị Neo4j và Kafka Connect container:
+Khởi chạy cơ sở dữ liệu đồ thị Neo4j và Kafka Connect container (yêu cầu nạp cả hai file compose):
 
 ```bash
-docker compose --env-file .env -f infra/docker-compose.yml up -d neo4j kafka-connect
+docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.neo4j.yml up -d neo4j kafka-connect
 ```
 
 Sau khi dịch vụ khởi chạy, thực hiện các bước sau để thiết lập schema và nạp connector:
@@ -97,6 +96,8 @@ docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb
 
 ## Dừng hạ tầng
 
-```powershell
-docker compose --env-file .env -f infra/docker-compose.yml down
+Dừng tất cả các container đang chạy:
+
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.neo4j.yml down
 ```

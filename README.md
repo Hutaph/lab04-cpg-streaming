@@ -8,10 +8,11 @@
 - **Repository nguồn phân tích**: `huggingface/transformers-pr-agent` (shallow clone tại runtime vào thư mục `workspace/source/`).
 - **Mục tiêu**: Phân tích cú pháp sinh AST, CFG, DFG, Call graph từ mã nguồn Python để phục vụ phân tích tĩnh, xử lý streaming thời gian thực.
 - **Tiến độ Hiện tại**:
-  - **Task 1 & Task 2**: Đã triển khai và kiểm chứng cục bộ (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
-  - **Task 3 (Kafka Ingestion)**: Đã triển khai và kiểm chứng trong phạm vi môi trường local (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh cấu trúc/phân vùng).
-  - **Task 4 (Neo4j Ingestion)**: Đã hoàn thành và kiểm chứng đầy đủ (Neo4j Kafka Sink Connector với Cypher FOREACH rẽ nhánh, cơ chế Node/Edge Tombstone chống stale resurrection, mixed-batch DLQ isolation, idempotent replay).
-  - **Task 5**: Đã triển khai và xác minh pipeline Spark Structured Streaming ghi metadata vào MongoDB bằng Docker.
+  - **Task 1 & Task 2**: Hoàn thành và kiểm chứng (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
+  - **Task 3 (Kafka Ingestion)**: Hoàn thành và kiểm chứng (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh cấu trúc/phân vùng).
+  - **Task 4 (Neo4j Ingestion)**: Hoàn thành và kiểm chứng (Neo4j Kafka Sink Connector với Cypher FOREACH rẽ nhánh, cơ chế Node/Edge Tombstone chống stale resurrection, mixed-batch DLQ isolation, idempotent replay).
+  - **Task 5 (Spark/MongoDB Ingestion)**: Hoàn thành và kiểm chứng (Spark Structured Streaming ghi metadata vào MongoDB bằng Docker).
+  - **Task 6 (Idempotent Replay Verification)**: Hoàn thành và kiểm chứng (Xác minh cơ chế chạy lại tăng dần và kháng trùng lặp đầu cuối).
 
 ---
 
@@ -23,15 +24,29 @@ uv sync --all-extras
 ```
 
 ### Bước 2: Chuẩn bị hạ tầng
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+Điền `MONGO_ROOT_PASSWORD`, `MONGODB_URI` và `NEO4J_PASSWORD` trong `.env` (copy từ `.env.example`).
+Sau đó khởi động toàn bộ dịch vụ (Zookeeper-less Kafka KRaft, Neo4j, Kafka Connect, MongoDB):
+
+**Linux / WSL:**
+```bash
+cp -n .env.example .env
+
+docker compose \
+  --env-file "$PWD/.env" \
+  -f "$PWD/infra/docker-compose.yml" \
+  -f "$PWD/infra/docker-compose.neo4j.yml" \
+  up -d --build
 ```
 
-Điền `MONGO_ROOT_PASSWORD`, `MONGODB_URI` và `NEO4J_PASSWORD` trong `.env`,
-sau đó khởi động các service:
+**Windows (PowerShell):**
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
-```bash
-docker compose --env-file .env -f infra/docker-compose.yml up -d kafka mongodb
+docker compose `
+  --env-file .env `
+  -f infra/docker-compose.yml `
+  -f infra/docker-compose.neo4j.yml `
+  up -d --build
 ```
 
 Chi tiết cấu hình và lệnh kiểm tra nằm trong [infra/README.md](infra/README.md).
@@ -67,6 +82,16 @@ uv run python scripts/inspect_kafka_events.py
 ```
 
 ### Bước 9: Chạy Spark metadata ingestion (Task 5)
+**Linux / WSL:**
+```bash
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+MONGODB_URI='mongodb://root:Lab04MongoLocal123@localhost:27017/?authSource=admin' \
+SPARK_CHECKPOINT_PATH=workspace/checkpoints/spark \
+spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
+             spark_jobs/metadata_to_mongodb.py --available-now
+```
+
+**Windows (PowerShell):**
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1 -AvailableNow
 ```
@@ -76,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1 -Av
 # Chạy unit tests
 PYTHONPATH=src uv run pytest tests/unit -q
 
-# Chạy integration tests (yêu cầu Kafka đang chạy)
+# Chạy integration tests (yêu cầu hạ tầng Docker đang chạy)
 PYTHONPATH=src uv run pytest tests/integration -v
 ```
 
@@ -86,4 +111,5 @@ PYTHONPATH=src uv run pytest tests/integration -v
 - **[AGENTS.md](AGENTS.md)**: Hướng dẫn cấu trúc, ngôn ngữ và các quy tắc bắt buộc cho AI Coding Agents.
 - **[docs/system_architecture.md](docs/system_architecture.md)**: Tài liệu đặc tả kỹ thuật chi tiết nhất (Kiến trúc hệ thống, Stable ID, cấu trúc thư mục, quy tắc dependency, và 7 quyết định thiết kế).
 - **[docs/implementation_plan.md](docs/implementation_plan.md)**: Kế hoạch triển khai chi tiết 15 phases, ma trận truy vết yêu cầu, chiến lược kiểm thử và hướng dẫn nộp bài.
-- **[lab04-book/](lab04-book/)**: Mã nguồn của báo cáo Jupyter Book chính thức (chứa kết quả chạy thực nghiệm Task 1, Task 2, Task 3 và Task 5).
+- **[infra/README.md](infra/README.md)**: Hướng dẫn quản lý hạ tầng Docker (Kafka KRaft, Neo4j, MongoDB, Kafka Connect) và triển khai connector.
+- **[lab04-book/](lab04-book/)**: Báo cáo Jupyter Book chính thức (gồm Landing Page, chương Sơ đồ kiến trúc, và các chương chạy thực nghiệm từ Task 1 đến Task 6 kèm reflections).
