@@ -12,13 +12,13 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 
 ---
 
-### 2. Danh sách các chương báo cáo
+### 2. Danh sách chương báo cáo
 - **[Task 1. Clone repository và khám phá file](task1_clone_explore.ipynb)**: Thực hiện shallow clone, xác định git commit hash và khảo sát cấu trúc thư mục, thống kê danh sách file Python nguồn.
-- **[Task 2. Xây dựng Incremental CPG Parser Service](task2_parser_service.ipynb)**: Triển khai CPG Parser phân tích AST, CFG, DFG, Call graph, sinh stable ID ổn định và chạy dry-run JSONL.
-- **[Task 3. Thiết kế Kafka topics](task3_kafka_topics.ipynb)**: Cấu hình broker, khởi tạo topic, publish events lên Kafka với key là `file_id` và xác minh schema, partition consistency, parser error flow.
-- **[Task 4. Ingest graph vào Neo4j bằng Kafka Sink Connector](task4_neo4j_sink.ipynb)**: Cấu hình Kafka Connect Sink đưa đồ thị CPG vào Neo4j, xử lý an toàn replay thông qua Cypher subqueries, map-merge properties, stale deletion guard và Dead Letter Queue.
-- **[Task 5. Ingest metadata nguồn vào MongoDB bằng Spark Streaming](task5_spark_mongodb.ipynb)**: Chạy Spark Structured Streaming đọc metadata từ Kafka, ghi MongoDB, kiểm tra checkpoint resume và upsert khi replay.
-- **[Task 6. Kiểm chứng idempotent replay](task6_idempotent_replay.ipynb)**: Kiểm chứng replay tăng dần qua stable IDs, graph diff, Neo4j idempotent writes, MongoDB upsert và Spark checkpoint.
+- **[Task 2. Xây dựng dịch vụ parser CPG tăng dần](task2_parser_service.ipynb)**: Triển khai CPG Parser phân tích AST, CFG, DFG, Call graph, sinh stable ID ổn định và chạy dry-run JSONL.
+- **[Task 3. Thiết kế topic Kafka](task3_kafka_topics.ipynb)**: Cấu hình broker, khởi tạo topic, publish events lên Kafka với key là `file_id` và xác minh schema, partition consistency, parser error flow.
+- **[Task 4. Ingest đồ thị vào Neo4j bằng Kafka Sink Connector](task4_neo4j_sink.ipynb)**: Cấu hình Kafka Connect Sink đưa đồ thị CPG vào Neo4j, xử lý replay-safe thông qua Cypher subqueries, map-merge properties, stale deletion guard và Dead Letter Queue.
+- **[Task 5. Ingest metadata nguồn vào MongoDB bằng Spark](task5_spark_mongodb.ipynb)**: Chạy Spark Structured Streaming đọc metadata từ Kafka, ghi MongoDB, kiểm tra checkpoint resume và upsert khi replay.
+- **[Task 6. Xác minh replay idempotent](task6_idempotent_replay.ipynb)**: Kiểm chứng replay tăng dần qua stable IDs, graph diff, Neo4j idempotent writes, MongoDB upsert và Spark checkpoint.
 - **[Sơ đồ kiến trúc pipeline CPG streaming](architecture_diagram.ipynb)**: Tổng hợp sơ đồ kiến trúc pipeline, topic layout, replay flow và ranh giới các layer trong hệ thống.
 
 ---
