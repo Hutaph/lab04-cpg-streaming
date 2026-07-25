@@ -42,8 +42,8 @@ Hệ thống bao gồm các lớp:
 
 ```mermaid
 graph TD
-    SourceRepo["Source Repository (huggingface/transformers-pr-agent)"] -->|"shallow clone"| FileDiscovery["File Discovery (CLI / Service)"]
-    FileDiscovery -->|"từng file Python"| CpgParser["CPG Parser Service"]
+    SourceRepo["Source Repository (huggingface/transformers-pr-agent)"] -->|"shallow clone"| FileDiscovery["Repository-root Python Discovery"]
+    FileDiscovery -->|"eligible manifest"| CpgParser["CPG Parser Service"]
     
     subgraph Parser Service Internal
         CpgParser --> AST["AST Builder"]
@@ -125,7 +125,7 @@ sequenceDiagram
 ---
 
 ## 6. Phân chia trách nhiệm từng thành phần
-- **File Discovery**: Định vị các file Python nguồn trong workspace, áp dụng bộ lọc (smoke/final) để trả về danh sách file hợp lệ.
+- **File Discovery**: Quét toàn bộ repository root để ghi nhận các file `.py` thô, sau đó áp dụng một bộ quy tắc lọc chung để tạo eligible manifest hoặc smoke sample.
 - **Parser Service**: Entrypoint điều phối luồng xử lý của từng file.
 - **AST Builder**: Duyệt cây cú pháp để trích xuất các node lệnh, biểu thức và thiết lập quan hệ cây cú pháp phân cấp (`AST_CHILD`).
 - **CFG Builder**: Xây dựng luồng điều khiển giữa các câu lệnh kề nhau (`CFG_NEXT`).
@@ -317,4 +317,4 @@ Hệ thống hoạt động như một pipeline xử lý phân tán và bất đ
 4. **Cơ chế Rollback theo Batch của Neo4j Connector**:
    Khi một batch chứa một bản ghi lỗi (mismatch endpoint), toàn bộ batch transaction của batch đó sẽ bị rollback ở phía Neo4j. Connector vẫn giữ trạng thái `RUNNING` và đẩy bản ghi lỗi vào DLQ (`connector.errors`), nhưng các bản ghi hợp lệ khác trong batch bị rollback đó sẽ bị mất ở Neo4j và cần được người dùng replay hoặc retry thủ công. Không được coi là các bản ghi hợp lệ đó đã thành công trong lần chạy đầu tiên.
 5. **Không đảm bảo Exactly-Once đầu-cuối (No End-to-End Exactly-Once)**:
-   Hệ thống cam kết tính replay-safe bằng idempotency (kháng trùng lặp) hơn là transaction exactly-once toàn trình. Spark checkpoint hỗ trợ khôi phục offset và MongoDB replace upsert theo `file_id` hỗ trợ idempotent metadata update, nhưng không loại trừ hoàn toàn các duplicate tin nhắn trung gian trên mạng lưới.
+   Hệ thống cam kết tính replay-safe bằng idempotency (kháng trùng lặp) thay vì transaction phân tán toàn trình. Spark checkpoint hỗ trợ khôi phục offset và MongoDB replace upsert theo `file_id` hỗ trợ idempotent metadata update, nhưng không loại trừ hoàn toàn các duplicate tin nhắn trung gian trên mạng lưới.

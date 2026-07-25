@@ -164,66 +164,18 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 
 ---
 
-## 5. Danh sách Backlog và Trạng thái Tồn đọng (Backlog and Pending Status)
+## 5. Ghi chú trạng thái hiện tại
 
-### 5.1. Backlog của Task 2
-Trạng thái tồn đọng kỹ thuật của Task 2 phục vụ các đợt tối ưu hóa trong tương lai:
-- **Chuẩn hóa runtime verification directories — Still pending.**
-  Implementation hiện vẫn sử dụng `workspace/tmp/notebook/` cho SQLite state và `workspace/tmp/notebook-parser/` cho JSONL output. Hai path này cần được gom về một cấu trúc semantic như `workspace/tmp/parser-verification/` trong một phiên refactor riêng.
-- **Dọn dẹp runtime verification artifacts — Still pending.**
-  Các SQLite và JSONL files sinh ra trong quá trình verification cần có cơ chế cleanup mặc định sau khi notebook hoặc verification flow kết thúc.
-- **Bổ sung `line` và `column` cho `SyntaxError` — Still pending.**
-  `PARSER_ERROR` hiện chưa lưu đầy đủ structured source position mặc dù exception message có thể chứa thông tin dòng và cột.
-- **Re-audit Task 2 cached outputs — Not re-audited.**
-  Task 2 notebook không được execute hoặc re-audit trong phiên này. Cần kiểm tra cached outputs sau khi runtime paths và error fields được refactor.
-- **Ẩn runtime directories khỏi project explorer — Still pending.**
-  Các thư mục verification tạm cần được loại khỏi source-oriented workspace view hoặc được cleanup để tránh bị hiểu nhầm là project artifacts.
+Các Task 1–4 đã có bằng chứng runtime trong Jupyter Book và bộ kiểm thử tự động:
 
-### 5.2. Trạng thái Task 3
-Task 3 đã hoàn thành các bước rà soát biên an toàn và kiểm chứng. Kafka broker, topic provisioning, event validation, full-batch pre-serialization, message keys, per-topic partition consistency, run-scoped inspection và publish-before-state-commit đã được kiểm chứng trong môi trường local single-broker.
-Về giới hạn kiến trúc: Kafka và SQLite không tham gia cùng một distributed transaction. Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling đầu cuối được kiểm chứng và hoàn thiện ở các Task tiếp theo (Task 4 & 5).
-Task 3 notebook đã được chạy thành công hai lần liên tiếp để xác nhận tính độc lập và dọn dẹp tài nguyên. Các cached outputs hiển thị đầy đủ kết quả của các Phase.
+- **Task 1**: Discovery bắt đầu từ repository root, ghi nhận 4.496 file Python thô và tạo manifest gồm 2.963 file hợp lệ sau khi loại test, setup/build và generated files.
+- **Task 2**: Parser Service xử lý từng file, sinh AST/CFG/DFG/Call graph, stable identifiers, metadata và parser error events. Notebook dùng smoke sample cố định; full mode nhận toàn bộ eligible manifest.
+- **Task 3**: Kafka nhận bốn dòng event chính (`cpg.nodes`, `cpg.edges`, `source.metadata`, `parser.errors`) với key `file_id`, schema hợp lệ và hành vi skip file không đổi.
+- **Task 4**: Kafka Connect ghi graph events trực tiếp vào Neo4j bằng Cypher `MERGE`, uniqueness constraints, placeholder handling và DLQ `connector.errors`.
 
-#### Accepted Limitations of Task 3
+Giới hạn thiết kế cần diễn giải đúng trong báo cáo:
 
-Các giới hạn dưới đây được biết đến và chấp nhận trong phạm vi Task 3. Chúng không phải là lỗi cần sửa trong Task 3.
-
-1. **Single broker topology**: Pipeline chạy trên một KRaft broker với replication factor 1.
-2. **No High Availability**: Không có broker redundancy hoặc failover.
-3. **Local `acks=all` semantics**: Trong topology hiện tại, `acks=all` chỉ chờ ISR duy nhất (broker đơn), không tạo broker redundancy.
-4. **No Kafka–SQLite distributed transaction**: Kafka và SQLite không cùng tham gia một atomic distributed transaction.
-5. **Partial delivery possibility**: Sau khi Kafka enqueue bắt đầu, một phần batch có thể đã được broker nhận trước khi failure được phát hiện.
-6. **Crash-window duplicate replay**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng batch được publish lại ở lần chạy tiếp theo.
-7. **Producer idempotence scope**: `enable.idempotence=True` giúp giảm duplicate do retry trong cùng một producer session. Nó không loại bỏ duplicate giữa các process runs, không đồng bộ Kafka với SQLite, và không xử lý side effects trên Neo4j hoặc MongoDB.
-8. **No cross-topic ordering**: Kafka không bảo đảm ordering giữa `cpg.nodes`, `cpg.edges`, `source.metadata` và `parser.errors`.
-9. **Per-partition ordering only**: Ordering chỉ được bảo toàn trong từng topic partition.
-10. **Partition remapping**: Thay đổi partition count có thể ánh xạ cùng `file_id` sang partition khác.
-11. **Limited topic drift detection**: Topic provisioning hiện kiểm tra partition count và replication factor; không xác nhận toàn bộ Kafka topic configuration.
-12. **Synchronous processing assumption**: Processing flow hiện tại giả định single-process execution tuần tự.
-13. **Downstream idempotency implemented and verified**: Neo4j idempotent ingestion đã được kiểm chứng đầy đủ qua các integration tests và notebook evidence sử dụng Cypher `MERGE` kết hợp ràng buộc unique ID.
-14. **Stale-event protection implemented**: Đã triển khai cơ chế Node và Edge Tombstones để lưu vết thế hệ đã bị xóa, ngăn chặn việc hồi sinh (resurrection) từ stale events cùng thế hệ.
-15. **Kafka Connect DLQ verified**: Đã cấu hình và kiểm chứng live topic `connector.errors` nhận các record lỗi mismatch endpoint, connector và tasks vẫn giữ trạng thái `RUNNING`.
-16. **Hard-kill cleanup limitation**: Python `try/finally` không chạy nếu process bị hard kill (`SIGKILL`); safe cleanup chỉ giảm nguy cơ để lại artifacts trong trường hợp bình thường.
-
-### 5.3. Optional Future Considerations
-- **Đánh giá Kafka Transactions**: Kafka transactions chỉ cần được đánh giá nếu hệ thống phát sinh một luồng Kafka-to-Kafka yêu cầu transactional semantics. Cơ chế này không tạo exactly-once end-to-end cho các side effects trên SQLite, Neo4j hoặc MongoDB.
-- **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
-
-### 5.4. Yêu cầu thiết kế cho Task 4 (Đã hoàn thành)
-**Status**: Completed and verified through integration tests and local runtime smoke validation.
-
-Neo4j Ingestion trong Task 4 đã được thiết kế và kiểm chứng đầy đủ với các kịch bản thực tế:
-- **Ingestion Idempotency**: Neo4j ingestion is replay-safe for the verified scenarios through stable IDs, uniqueness constraints, MERGE, generation-aware tombstones, and idempotent delete handling. Chúng tôi không cam kết transaction phân tán exactly-once chéo hệ thống.
-- **Ordering & Placeholders**: Kafka ordering is per partition within one topic. Không có thứ tự chéo topic. Edge events có thể đến trước node events, do đó placeholder handling là bắt buộc và đã được xử lý.
-- **Mixed-Batch Rollback Limitation**: Các record trong một Neo4j connector batch chia sẻ chung một giao dịch. Một record lỗi (ví dụ: endpoint mismatch) sẽ rollback toàn bộ giao dịch của batch đó. Bản ghi lỗi đi vào DLQ, còn các bản ghi hợp lệ trong batch bị rollback đó yêu cầu phải replay/retry để nạp lại.
-- **Cross-Generation Limitation**: Tombstone ngăn chặn stale replay cho cùng một thế hệ sự kiện (same generation). Tuy nhiên, thiết kế không xây dựng một thứ tự monotonic toàn cục giữa các thế hệ độc lập; thứ tự đến chéo thế hệ vẫn có thể ảnh hưởng đến kết quả cuối cùng.
-- **Order-tolerant ingestion (Đã giải quyết):**
-  Cypher tự động tạo placeholder nodes khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes mà không bị lỗi.
-- **Idempotent upsert và delete (Đã giải quyết):**
-  Cypher sử dụng `MERGE` kết hợp uniqueness constraints đảm bảo replay không tạo trùng lặp hay duplicate nodes/edges/tombstones.
-- **Stale-event protection (Đã giải quyết):**
-  Đã triển khai hệ thống Tombstones lưu trữ `generation_id` dạng `file_id:content_hash:parser_version:schema_version`. `EDGE_UPSERT` và `NODE_UPSERT` bị chặn nếu tombstone cùng thế hệ tồn tại.
-- **Delete race handling (Đã giải quyết):**
-  `EDGE_DELETE` luôn tạo `CPGEdgeTombstone` dựa trên event fields bất kể relationship có tồn tại hay không, chặn hoàn toàn stale `EDGE_UPSERT` đến sau.
-- **Kafka Connect DLQ (Đã giải quyết):**
-  Cấu hình `connector.errors` làm DLQ và kiểm chứng live bằng lỗi endpoint mismatch. Các bản ghi hợp lệ trong batch bị ảnh hưởng bởi rollback giao dịch sẽ được ghi thành công sau khi gửi độc lập (replay/retry), còn record lỗi được đẩy vào DLQ thành công.
+- Môi trường thực nghiệm dùng Kafka single broker và Neo4j local, phù hợp để chứng minh contract và idempotent replay trong phạm vi lab.
+- Kafka chỉ bảo toàn thứ tự trong từng topic partition; không có ordering chéo topic.
+- Kafka, SQLite, Neo4j và MongoDB không nằm trong một transaction phân tán. Replay safety dựa trên stable IDs, state store, `MERGE`, constraints và tombstones thay vì cam kết giao dịch toàn cục.
+- Task 5–6 thuộc phạm vi Spark/MongoDB và replay tổng hợp; không thay đổi implementation trong lượt cleanup Task 1–4.

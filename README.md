@@ -24,7 +24,7 @@ uv sync --all-extras
 ```
 
 ### Bước 2: Chuẩn bị hạ tầng
-Điền `MONGO_ROOT_PASSWORD`, `MONGODB_URI` và `NEO4J_PASSWORD` trong `.env` (copy từ `.env.example`).
+Điền các biến mật khẩu và URI runtime trong `.env` (copy từ `.env.example`).
 Sau đó khởi động toàn bộ dịch vụ (Zookeeper-less Kafka KRaft, Neo4j, Kafka Connect, MongoDB):
 
 **Linux / WSL:**
@@ -82,10 +82,15 @@ uv run python scripts/inspect_kafka_events.py
 ```
 
 ### Bước 9: Chạy Spark metadata ingestion (Task 5)
+Notebook Task 5 và script chạy Spark đọc cấu hình từ `.env`, vì vậy README không nhúng URI kết nối trực tiếp.
+
 **Linux / WSL:**
 ```bash
+set -a
+. ./.env
+set +a
+
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
 SPARK_CHECKPOINT_PATH=workspace/checkpoints/spark \
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
              spark_jobs/metadata_to_mongodb.py --available-now

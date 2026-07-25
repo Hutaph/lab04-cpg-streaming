@@ -20,8 +20,9 @@ class ProducerState(Enum):
 class KafkaEventProducer(EventPublisherPort):
     """Adapter publishing JSON-serialized CPG events directly to Apache Kafka topics."""
 
-    def __init__(self, bootstrap_servers: str, producer_instance: Any = None):
+    def __init__(self, bootstrap_servers: str, producer_instance: Any = None, flush_timeout_seconds: float = 60.0):
         self.bootstrap_servers = bootstrap_servers
+        self.flush_timeout_seconds = flush_timeout_seconds
         self._producer = producer_instance
         self._initialized = producer_instance is not None
         self._errors: list[str] = []
@@ -37,11 +38,12 @@ class KafkaEventProducer(EventPublisherPort):
         try:
             from confluent_kafka import Producer
 
+            delivery_timeout_ms = max(10_000, int(self.flush_timeout_seconds * 1000))
             conf = {
                 "bootstrap.servers": self.bootstrap_servers,
                 "acks": "all",
                 "retries": 5,
-                "delivery.timeout.ms": 10000,
+                "delivery.timeout.ms": delivery_timeout_ms,
                 "enable.idempotence": True,
             }
             self._producer = Producer(conf)
@@ -113,7 +115,7 @@ class KafkaEventProducer(EventPublisherPort):
 
         try:
             # Blocks until all messages in the queue are delivered/failed
-            undelivered = self._producer.flush(timeout=10.0)
+            undelivered = self._producer.flush(timeout=self.flush_timeout_seconds)
             if undelivered > 0:
                 self._state = ProducerState.FAILED
                 self._failed = True

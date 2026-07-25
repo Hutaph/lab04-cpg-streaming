@@ -10,8 +10,8 @@ Tạo file môi trường local và điền các password nếu file chưa tồn
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Tối thiểu cần điền `MONGO_ROOT_PASSWORD` và `NEO4J_PASSWORD`. URI
-`MONGODB_URI` phải dùng cùng password MongoDB và thêm `authSource=admin`.
+Tối thiểu cần điền các biến mật khẩu cho MongoDB và Neo4j. URI kết nối MongoDB
+phải dùng cùng password MongoDB và thêm `authSource=admin`.
 File `.env` đã được thêm vào `.gitignore`; không commit file này.
 
 ## Khởi chạy hạ tầng
