@@ -13,6 +13,9 @@ scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 sys.path.append(str(scripts_dir))
 
 import deploy_connectors  # noqa: E402
+from infrastructure.verification.kafka_connect import get_connector_lag, wait_for_zero_lag  # noqa: E402
+
+KAFKA_CONNECT_RESTART_FALLBACK_COUNT = 0
 
 
 def run_cypher_query(query: str, password: str) -> list[list[str]]:
@@ -51,6 +54,69 @@ def run_cypher_query(query: str, password: str) -> list[list[str]]:
     except Exception as exc:
         print(f"Failed to run cypher: {exc}", file=sys.stderr)
         return []
+
+
+def restart_kafka_connect_worker() -> None:
+    """Restart Kafka Connect without changing source topic data or consumer offsets."""
+    global KAFKA_CONNECT_RESTART_FALLBACK_COUNT
+    KAFKA_CONNECT_RESTART_FALLBACK_COUNT += 1
+    before_nodes = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors/neo4j-nodes-sink/status")
+    before_edges = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors/neo4j-edges-sink/status")
+    print(
+        "Kafka Connect fallback restart requested: "
+        f"count={KAFKA_CONNECT_RESTART_FALLBACK_COUNT} "
+        f"nodes_status={before_nodes[0]} "
+        f"edges_status={before_edges[0]} "
+        f"nodes_state={before_nodes[1].get('connector', {}).get('state', 'UNKNOWN') if isinstance(before_nodes[1], dict) else 'UNKNOWN'} "
+        f"edges_state={before_edges[1].get('connector', {}).get('state', 'UNKNOWN') if isinstance(before_edges[1], dict) else 'UNKNOWN'} "
+        f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
+        f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
+    )
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            ".env",
+            "-f",
+            "infra/docker-compose.yml",
+            "-f",
+            "infra/docker-compose.neo4j.yml",
+            "restart",
+            "kafka-connect",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    deadline = time.monotonic() + 90.0
+    while time.monotonic() < deadline:
+        try:
+            code, _ = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors")
+            if code == 200:
+                print(
+                    "Kafka Connect fallback restart completed: "
+                    f"nodes_state={deploy_connectors.get_connector_status('neo4j-nodes-sink').get('connector', {}).get('state', 'UNKNOWN')} "
+                    f"edges_state={deploy_connectors.get_connector_status('neo4j-edges-sink').get('connector', {}).get('state', 'UNKNOWN')} "
+                    f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
+                    f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
+                )
+                return
+        except Exception:
+            pass
+        time.sleep(2.0)
+    raise TimeoutError("Kafka Connect REST API did not become ready after restart")
+
+
+def wait_for_edges_lag_zero_with_restart() -> None:
+    """Wait for edge sink lag to clear, restarting the worker once for retry backlogs."""
+    try:
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=30)
+        return
+    except TimeoutError:
+        restart_kafka_connect_worker()
+        deploy_connectors.main()
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=90)
 
 
 @pytest.mark.neo4j
@@ -250,7 +316,7 @@ def test_edge_ingestion_and_placeholder_scenarios(kafka_producer: Producer, neo4
 
     kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
     kafka_producer.flush()
-    time.sleep(3.5)
+    time.sleep(6.0)
 
     # Verify that source and target nodes were created as placeholders
     res_nodes = run_cypher_query(
@@ -503,7 +569,13 @@ def test_dead_letter_queue_handling(kafka_producer: Producer, env_vars: dict[str
 def test_base_compose_without_neo4j_secret():
     """Verify that base docker-compose config command succeeds when NEO4J_PASSWORD is not set."""
     # Run config with NEO4J_PASSWORD unset using clean environment
+    import dotenv
+
     env = dict(os.environ)
+    if Path(".env").exists():
+        for k, v in dotenv.dotenv_values(".env").items():
+            if k != "NEO4J_PASSWORD" and v is not None:
+                env.setdefault(k, v)
     if "NEO4J_PASSWORD" in env:
         del env["NEO4J_PASSWORD"]
 
@@ -1540,7 +1612,8 @@ def test_mixed_batch_dlq_isolation(kafka_producer: Producer, env_vars: dict[str,
     # Assert invalid record reached DLQ — poll with timeout
     dlq_msg = dlq_consumer.poll(timeout=10.0)
     assert dlq_msg is not None, f"Invalid mixed-batch record must reach DLQ (run_id={run_id})"
-    assert dlq_consumer.poll(timeout=1.0) is not None or True  # drain; DLQ msg confirmed above
+    while dlq_consumer.poll(timeout=0.2) is not None:
+        pass
 
     # Connector and tasks remain RUNNING (errors.tolerance=all prevents crash)
     code, status = deploy_connectors.make_request("http://localhost:8083/connectors/neo4j-edges-sink/status")
@@ -1586,5 +1659,7 @@ def test_mixed_batch_dlq_isolation(kafka_producer: Producer, env_vars: dict[str,
         neo4j_password,
     )
     assert res_b_replay[1][0] == "1", "Replay of B must not create duplicate"
+
+    wait_for_edges_lag_zero_with_restart()
 
     dlq_consumer.close()

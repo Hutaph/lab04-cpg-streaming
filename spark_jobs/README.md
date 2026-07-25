@@ -17,7 +17,7 @@ replay cùng metadata sẽ cập nhật document hiện có thay vì tạo bản
 Chạy local bằng lệnh `spark-submit`:
 
 ```bash
-MONGODB_URI='mongodb://root:CHANGE_ME_MONGO_PASSWORD@localhost:27017/?authSource=admin' \
+MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
              spark_jobs/metadata_to_mongodb.py
 ```
@@ -42,7 +42,7 @@ Hoặc truyền trực tiếp các biến môi trường:
 
 ```bash
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-MONGODB_URI='mongodb://root:CHANGE_ME_MONGO_PASSWORD@localhost:27017/?authSource=admin' \
+MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
 SPARK_CHECKPOINT_PATH=workspace/checkpoints/spark \
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
              spark_jobs/metadata_to_mongodb.py
@@ -51,7 +51,7 @@ spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.
 Chạy một lần để kiểm tra dữ liệu hiện có trong Kafka:
 
 ```bash
-MONGODB_URI='mongodb://root:CHANGE_ME_MONGO_PASSWORD@localhost:27017/?authSource=admin' \
+MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
              spark_jobs/metadata_to_mongodb.py --available-now
 ```
