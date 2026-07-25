@@ -10,7 +10,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, urlparse
+
+SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from infrastructure.config.mongodb import build_mongodb_uri
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -37,10 +43,12 @@ class MongoConfig:
         return f"{self.username[0]}***{self.username[-1]}"
 
     def host_uri(self) -> str:
-        return _build_uri(self.username, self.password, self.host, self.auth_source)
+        host, port = self.host.split(":", maxsplit=1)
+        return build_mongodb_uri(self.username, self.password, host, int(port), self.auth_source)
 
     def container_uri(self) -> str:
-        return _build_uri(self.username, self.password, self.container_host, self.auth_source)
+        host, port = self.container_host.rsplit(":", maxsplit=1)
+        return build_mongodb_uri(self.username, self.password, host, int(port), self.auth_source)
 
 
 def load_env_file(path: Path) -> None:
@@ -62,14 +70,14 @@ def load_config(args: argparse.Namespace | None = None) -> MongoConfig:
     password = os.environ.get("MONGO_ROOT_PASSWORD", "")
     uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/?authSource=admin")
     parsed = urlparse(uri)
-    host = parsed.netloc.rsplit("@", maxsplit=1)[-1] or "localhost:27017"
+    host = parsed.netloc.rsplit("@", maxsplit=1)[-1] or "localhost:27018"
     if args and args.host_port:
         host = f"localhost:{args.host_port}"
     elif os.environ.get("MONGODB_HOST_PORT"):
         host = f"localhost:{os.environ['MONGODB_HOST_PORT']}"
-    container_host = os.environ.get("MONGODB_CONTAINER_HOST", "cpg-mongodb")
+    container_host = os.environ.get("MONGODB_CONTAINER_HOST", "cpg-mongodb-metadata")
     container_port = os.environ.get("MONGODB_CONTAINER_PORT", "27017")
-    container_name = os.environ.get("MONGODB_CONTAINER_NAME", "cpg-mongodb")
+    container_name = os.environ.get("MONGODB_CONTAINER_NAME", "cpg-mongodb-metadata")
     if args and args.container_host:
         container_host = args.container_host
     if args and args.container_port:
@@ -98,12 +106,6 @@ def load_config(args: argparse.Namespace | None = None) -> MongoConfig:
         database,
         collection,
     )
-
-
-def _build_uri(username: str, password: str, host: str, auth_source: str) -> str:
-    user = quote(username, safe="")
-    secret = quote(password, safe="")
-    return f"mongodb://{user}:{secret}@{host}/?authSource={auth_source}"
 
 
 def run_command(command: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:

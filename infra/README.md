@@ -131,17 +131,17 @@ Nếu volume mặc định `infra_mongodb_data` đã được initialize bằng 
 docker compose \
   --env-file .env \
   -f infra/docker-compose.yml \
-  -f infra/docker-compose.mongodb-task56.yml \
-  up -d mongodb-task56
+  -f infra/docker-compose.mongodb-metadata.yml \
+  up -d mongodb-metadata
 ```
 
-Service này dùng container `cpg-mongodb-task56`, host port `27018`, container host `cpg-mongodb-task56:27017` và named volume logical `mongodb_task56_data` do Compose quản lý. Chạy preflight endpoint cô lập:
+Service này dùng container `cpg-mongodb-metadata`, host port `27018`, container host `cpg-mongodb-metadata:27017` và named volume logical `mongodb_metadata_data` do Compose quản lý. Chạy preflight endpoint cô lập:
 
 ```bash
 MONGODB_HOST_PORT=27018 \
-MONGODB_CONTAINER_HOST=cpg-mongodb-task56 \
+MONGODB_CONTAINER_HOST=cpg-mongodb-metadata \
 MONGODB_CONTAINER_PORT=27017 \
-MONGODB_CONTAINER_NAME=cpg-mongodb-task56 \
+MONGODB_CONTAINER_NAME=cpg-mongodb-metadata \
 uv run python scripts/preflight_mongodb.py
 ```
 

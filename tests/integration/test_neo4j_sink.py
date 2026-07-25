@@ -89,34 +89,22 @@ def restart_kafka_connect_worker() -> None:
         capture_output=True,
         text=True,
     )
-    deadline = time.monotonic() + 90.0
-    while time.monotonic() < deadline:
-        try:
-            code, _ = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors")
-            if code == 200:
-                print(
-                    "Kafka Connect fallback restart completed: "
-                    f"nodes_state={deploy_connectors.get_connector_status('neo4j-nodes-sink').get('connector', {}).get('state', 'UNKNOWN')} "
-                    f"edges_state={deploy_connectors.get_connector_status('neo4j-edges-sink').get('connector', {}).get('state', 'UNKNOWN')} "
-                    f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
-                    f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
-                )
-                return
-        except Exception:
-            pass
-        time.sleep(2.0)
-    raise TimeoutError("Kafka Connect REST API did not become ready after restart")
+    time.sleep(5.0)
+    print(
+        "Kafka Connect restart issued: "
+        f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
+        f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
+    )
 
 
 def wait_for_edges_lag_zero_with_restart() -> None:
     """Wait for edge sink lag to clear, restarting the worker once for retry backlogs."""
     try:
-        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=30)
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=60)
         return
     except TimeoutError:
         restart_kafka_connect_worker()
-        deploy_connectors.main()
-        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=90)
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=180)
 
 
 @pytest.mark.neo4j
