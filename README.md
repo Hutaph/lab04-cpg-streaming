@@ -130,6 +130,14 @@ Báo cáo chính thức nằm trong [lab04-book/](lab04-book/) và được xu�
 | GitHub repository | [Hutaph/lab04-cpg-streaming](https://github.com/Hutaph/lab04-cpg-streaming) |
 | Jupyter Book site | [hutaph.github.io/lab04-cpg-streaming](https://hutaph.github.io/lab04-cpg-streaming/) |
 
+Thành viên:
+
+| MSSV | Họ và tên |
+|---|---|
+| 23120318 | Trương Quang Phát |
+| 23120329 | Châu Huỳnh Phúc |
+| 23120334 | Huỳnh Tấn Phước |
+
 Các chương chính:
 
 - [Sơ đồ kiến trúc](lab04-book/architecture_diagram.ipynb)
