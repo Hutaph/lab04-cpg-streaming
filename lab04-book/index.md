@@ -2,6 +2,15 @@
 
 Báo cáo này trình bày pipeline streaming tăng dần để trích xuất Code Property Graph (CPG) từ repository Python, publish event qua Kafka, rồi ingest vào Neo4j và MongoDB theo hai nhánh xử lý độc lập.
 
+## Nhóm thực hiện
+
+| MSSV | Họ và tên | Đóng góp |
+|---|---|---|
+| 23120318 | Trương Quang Phát | 100% |
+| 23120329 | Châu Huỳnh Phúc | 100% |
+| 23120334 | Huỳnh Tấn Phước | 100% |
+
+
 ## Mục tiêu
 
 Lab 04 tập trung vào một pipeline dữ liệu lớn có tính incremental:
