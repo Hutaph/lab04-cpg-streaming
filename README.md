@@ -64,7 +64,18 @@ Hạ tầng local dùng Docker Compose:
 - MongoDB cho metadata documents.
 - Spark runtime cho Structured Streaming job.
 
-Chi tiết port, endpoint host/container và connector deployment nằm trong [infra/README.md](infra/README.md).
+Các port chính khi chạy local:
+
+| Dịch vụ | Host endpoint | Container endpoint | Mục đích |
+|---|---|---|---|
+| Kafka | `localhost:9092` | `kafka:29092` | Nhận CPG events từ Parser Service |
+| Kafka Connect | `localhost:8083` | `kafka-connect:8083` | Quản lý Neo4j sink connectors |
+| Neo4j Browser | `localhost:7474` | `cpg-neo4j:7474` | Giao diện kiểm tra graph |
+| Neo4j Bolt | `localhost:7687` | `cpg-neo4j:7687` | Endpoint driver/connector |
+| MongoDB | `localhost:27017` | `mongodb:27017` | Lưu metadata documents |
+| Mongo Express | `localhost:8081` | `mongo-express:8081` | Giao diện kiểm tra MongoDB |
+
+Chi tiết đầy đủ về port, endpoint host/container và connector deployment nằm trong [infra/README.md](infra/README.md). Cấu hình nguồn nằm ở [infra/docker-compose.yml](infra/docker-compose.yml), [infra/docker-compose.neo4j.yml](infra/docker-compose.neo4j.yml) và [config/application.yaml](config/application.yaml).
 
 ## Topic layout
 
@@ -77,6 +88,39 @@ Chi tiết port, endpoint host/container và connector deployment nằm trong [i
 | `connector.errors` | Kafka Connect dead-letter topic |
 
 Task 4 chỉ xử lý graph path Kafka Connect -> Neo4j. Spark không ghi graph vào Neo4j.
+
+## Prerequisites
+
+Máy local cần có các công cụ sau trước khi chạy lab:
+
+| Công cụ | Mục đích |
+|---|---|
+| Python 3.11+ | Chạy Parser Service, utility scripts và tests |
+| `uv` | Quản lý môi trường Python và dependencies |
+| Docker | Chạy Kafka, Kafka Connect, Neo4j, MongoDB và Mongo Express |
+| Docker Compose | Khởi động stack hạ tầng trong `infra/` |
+| Node.js và `npx` | Build Jupyter Book khi cần xuất báo cáo tĩnh |
+| Java và Apache Spark | Chạy Spark Structured Streaming local ngoài Docker |
+
+Nếu chỉ chạy parser dry-run và unit tests thì chưa cần khởi động Docker services. Nếu chạy đầy đủ Task 3-5 thì cần Docker Compose và Spark local.
+
+## Biến môi trường
+
+Tạo file `.env` từ template trước khi khởi động hạ tầng:
+
+```bash
+cp -n .env.example .env
+```
+
+Cập nhật tối thiểu các biến sau trong `.env`:
+
+| Biến | Mục đích |
+|---|---|
+| `NEO4J_PASSWORD` | Mật khẩu user `neo4j` cho Neo4j và Kafka Connect Sink |
+| `MONGO_ROOT_PASSWORD` | Mật khẩu root cho MongoDB |
+| `MONGODB_URI` | URI MongoDB dùng cùng mật khẩu đã đặt |
+
+Không commit `.env` hoặc credential thật. Các biến mẫu và endpoint mặc định nằm trong [.env.example](.env.example).
 
 ## Quick start
 
@@ -118,6 +162,73 @@ Chạy Parser publish Kafka smoke:
 
 ```bash
 uv run lab04 parse-repository --scope smoke --limit 5 --no-dry-run
+```
+
+## Thứ tự chạy end-to-end
+
+Checklist dưới đây là luồng chạy đầy đủ từ source repository đến Neo4j và MongoDB:
+
+1. Chuẩn bị dependencies và `.env`:
+
+```bash
+uv sync --all-extras
+cp -n .env.example .env
+```
+
+2. Cập nhật `NEO4J_PASSWORD`, `MONGO_ROOT_PASSWORD` và `MONGODB_URI` trong `.env`.
+
+3. Khởi động hạ tầng:
+
+```bash
+docker compose \
+  --env-file "$PWD/.env" \
+  -f "$PWD/infra/docker-compose.yml" \
+  -f "$PWD/infra/docker-compose.neo4j.yml" \
+  up -d --build
+```
+
+4. Clone source repository và tạo manifest:
+
+```bash
+uv run lab04 clone-source
+uv run lab04 discover --scope final --manifest artifacts/manifests/source-files.jsonl
+```
+
+5. Tạo Kafka topics:
+
+```bash
+./scripts/create_topics.sh
+```
+
+6. Tạo Neo4j constraints/indexes:
+
+```bash
+PYTHONPATH=src uv run python scripts/create_neo4j_schema.py
+```
+
+7. Deploy Kafka Connect sinks cho Neo4j:
+
+```bash
+PYTHONPATH=src uv run python scripts/deploy_connectors.py
+```
+
+8. Publish CPG events từ Parser Service:
+
+```bash
+uv run lab04 parse-repository --scope smoke --limit 5 --no-dry-run
+```
+
+9. Chạy Spark job ghi metadata sang MongoDB:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1 -AvailableNow
+```
+
+10. Kiểm tra dữ liệu trong Neo4j và MongoDB:
+
+```bash
+PYTHONPATH=src uv run python scripts/inspect_neo4j_graph.py
+docker exec cpg-mongodb mongosh -u root -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin < scripts/verify_mongodb.js
 ```
 
 ## Jupyter Book
