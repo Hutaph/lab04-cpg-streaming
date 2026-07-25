@@ -122,7 +122,15 @@ uv run lab04 parse-repository --scope smoke --limit 5 --no-dry-run
 
 ## Jupyter Book
 
-Báo cáo chính thức nằm trong [lab04-book/](lab04-book/). Các chương chính:
+Báo cáo chính thức nằm trong [lab04-book/](lab04-book/) và được xuất bản tại [GitHub Pages](https://hutaph.github.io/lab04-cpg-streaming/).
+
+| Hạng mục | Giá trị |
+|---|---|
+| Nhóm thực hiện | Nhóm PPP |
+| GitHub repository | [Hutaph/lab04-cpg-streaming](https://github.com/Hutaph/lab04-cpg-streaming) |
+| Jupyter Book site | [hutaph.github.io/lab04-cpg-streaming](https://hutaph.github.io/lab04-cpg-streaming/) |
+
+Các chương chính:
 
 - [Sơ đồ kiến trúc](lab04-book/architecture_diagram.ipynb)
 - [Task 1](lab04-book/task1_clone_explore.ipynb)
