@@ -1,22 +1,67 @@
 # Lab 04: Incremental Code Property Graph Streaming Pipeline
 
-Báo cáo này trình bày pipeline streaming tăng dần để trích xuất Code Property Graph (CPG) từ repository Python, phát sự kiện qua Kafka, rồi nạp vào Neo4j và MongoDB theo hai nhánh xử lý độc lập.
+Báo cáo này trình bày pipeline streaming tăng dần để trích xuất Code Property Graph (CPG) từ repository Python, publish event qua Kafka, rồi ingest vào Neo4j và MongoDB theo hai nhánh xử lý độc lập.
 
-## Tổng quan
-- Repository nguồn: `huggingface/transformers-pr-agent`
-- Commit nguồn: `458c957fa1e8851825cd799f5d030876f0644194`
-- Discovery scope hiện tại: 4.496 file Python raw, 2.963 file eligible sau exclusions
-- Mục tiêu kỹ thuật: parsing tăng dần, stable identifiers, Kafka routing rõ ràng, Neo4j idempotent ingestion, Spark metadata ingestion
+## Mục tiêu
+
+Lab 04 tập trung vào một pipeline dữ liệu lớn có tính incremental:
+
+- discovery repository nguồn bằng snapshot có thể tái hiện;
+- parse từng file Python để tạo AST, CFG, DFG và call graph;
+- publish node, edge, metadata và parser error events vào Kafka;
+- ghi graph topology trực tiếp vào Neo4j bằng Kafka Connect;
+- ghi metadata vào MongoDB bằng Spark Structured Streaming;
+- kiểm chứng replay bằng stable identifiers, state, upsert và checkpoint.
+
+## Kiến trúc overview
+
+```mermaid
+flowchart LR
+    Repo["Repository source"]
+    Manifest["Discovery manifest"]
+    Parser["Incremental Parser Service"]
+    Kafka["Kafka topics"]
+    Neo4j["Kafka Connect -> Neo4j"]
+    Mongo["Spark -> MongoDB"]
+
+    Repo --> Manifest --> Parser --> Kafka
+    Kafka --> Neo4j
+    Kafka --> Mongo
+```
+
+Sơ đồ chi tiết hơn nằm ở chương [Sơ đồ kiến trúc](architecture_diagram.ipynb). Các chương Task 1-4 trình bày runtime evidence cho discovery, parser, Kafka và Neo4j graph ingestion.
+
+## Repository thực nghiệm
+
+| Hạng mục | Giá trị |
+|---|---|
+| Source repository | `huggingface/transformers-pr-agent` |
+| Source commit | `458c957fa1e8851825cd799f5d030876f0644194` |
+| Raw Python discovery records | 4.496 |
+| Eligible parser inputs | 2.963 |
+
+Các số liệu discovery được tạo từ repository root. Eligible parser inputs là tập record được Parser Service sử dụng sau khi áp dụng rule loại tests, setup/build files và generated files.
 
 ## Các chương
-- [Task 1. Clone repository và khám phá file](task1_clone_explore.ipynb): ghi nhận nguồn, khám phá raw Python files và tạo manifest eligible.
-- [Task 2. Xây dựng dịch vụ parser CPG tăng dần](task2_parser_service.ipynb): trích xuất AST, CFG, DFG, call edges và phát event theo contract ổn định.
-- [Task 3. Phân phối sự kiện và cấu trúc Kafka Topics](task3_kafka_topics.ipynb): kiểm chứng topic layout, schema, key và hành vi publish/skip/error.
-- [Task 4. Nạp đồ thị vào Neo4j bằng Kafka Sink Connector](task4_neo4j_sink.ipynb): kiểm chứng Kafka Connect sink, lag, DLQ, idempotent replay và integrity graph.
-- [Task 5. Nạp metadata nguồn vào MongoDB bằng Spark](task5_spark_mongodb.ipynb): ghi metadata streaming vào MongoDB.
-- [Task 6. Xác minh replay idempotent](task6_idempotent_replay.ipynb): kiểm chứng replay và trạng thái tăng dần.
-- [Sơ đồ kiến trúc](architecture_diagram.ipynb): tổng hợp kiến trúc và luồng dữ liệu.
 
-## Kết quả hiện có
-- Task 1-4 đã có evidence thực thi và kiểm chứng cục bộ/Docker.
-- Task 5-6 được giữ nguyên để phục vụ phần còn lại của đồ án.
+| Chương | Nội dung |
+|---|---|
+| Sơ đồ kiến trúc | Tổng quan pipeline, event streams và incremental replay |
+| Task 1 | Clone repository, discovery file Python và manifest |
+| Task 2 | Parser Service, stable IDs và incremental state |
+| Task 3 | Kafka topics, routing, schema và parser error stream |
+| Task 4 | Kafka Connect -> Neo4j graph ingestion |
+| Task 5 | Spark Structured Streaming -> MongoDB metadata |
+| Task 6 | Modified-file replay verification |
+
+## Kết quả nổi bật
+
+- Task 1 tạo discovery manifest có raw records và eligible parser inputs rõ ràng.
+- Task 2 chứng minh parser có thể xử lý smoke sample bằng bounded-memory flow và stable IDs.
+- Task 3 xác minh bốn Parser Service topics với Kafka key bằng `file_id`.
+- Task 4 xác minh graph events được ingest trực tiếp vào Neo4j, lag trở về 0 và các kiểm tra duplicate/null/placeholder pass trong scenario đã chạy.
+- Task 5 và Task 6 giữ nhánh metadata/replay cho phần còn lại của pipeline.
+
+## Cách đọc báo cáo
+
+Nên đọc chương kiến trúc trước để nắm luồng tổng thể, sau đó đi theo Task 1 đến Task 6. Các notebook chứa executed cells và cached outputs; những smoke run trong notebook được dùng để tạo evidence gọn và có thể tái hiện, không được diễn giải thành full Kafka publish nếu notebook không chạy full mode.
