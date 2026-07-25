@@ -7,6 +7,7 @@ from pathlib import Path
 from application.ports import StateStorePort
 from domain.models import FileState
 from domain.errors import StateStoreError
+from parsing.identifiers import normalize_relative_path
 
 
 class SqliteStateStore(StateStorePort):
@@ -85,6 +86,7 @@ class SqliteStateStore(StateStorePort):
         schema_version: str,
     ) -> None:
         """Saves file parsing results and IDs as sorted deterministic JSON lists."""
+        normalized_file_path = normalize_relative_path(file_path)
         node_ids_json = json.dumps(sorted(node_ids))
         edge_ids_json = json.dumps(sorted(edge_ids))
         updated_at = datetime.now(timezone.utc).isoformat()
@@ -107,7 +109,7 @@ class SqliteStateStore(StateStorePort):
                     (
                         file_id,
                         self.repository_id,
-                        file_path,
+                        normalized_file_path,
                         content_hash,
                         node_ids_json,
                         edge_ids_json,

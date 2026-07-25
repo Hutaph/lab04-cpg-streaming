@@ -1,34 +1,44 @@
 """Stable identifier generator for CPG entities and events using SHA-256."""
 
 import hashlib
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 
 from domain.constants import PARSER_VERSION, SCHEMA_VERSION
+
+
+def normalize_relative_path(file_path: str | Path) -> str:
+    """Return the canonical relative POSIX path used at parser/event/state boundaries."""
+    raw_path = str(file_path).strip()
+    if not raw_path:
+        raise ValueError("Path must not be empty.")
+
+    if PureWindowsPath(raw_path).drive:
+        raise ValueError(f"Absolute path is not allowed: {raw_path}")
+
+    path_str = raw_path.replace("\\", "/")
+    if path_str.startswith("/"):
+        raise ValueError(f"Absolute path is not allowed: {path_str}")
+
+    parts = [part for part in path_str.split("/") if part not in ("", ".")]
+    if not parts:
+        raise ValueError("Path must not resolve to repository root.")
+    if any(part == ".." for part in parts):
+        raise ValueError(f"Path contains invalid directory traversal: {path_str}")
+
+    return "/".join(parts)
 
 
 class IdentifierGenerator:
     """Utility class to compute deterministic hashes for CPG files, nodes, edges, and events."""
 
     @staticmethod
-    def normalize_path(file_path: Path) -> str:
-        """Converts backslashes to forward slashes and returns relative POSIX path string.
-
-        Ensures no absolute paths or directory traversal outside repository context is used.
-        """
-        # Ensure path is converted to a POSIX path format with forward slashes
-        path_str = str(file_path).replace("\\", "/")
-
-        # Check and clean directory traversal risks
-        if path_str.startswith("../") or "/../" in path_str:
-            raise ValueError(f"Path contains invalid directory traversal: {path_str}")
-        if Path(path_str).is_absolute():
-            raise ValueError(f"Absolute path is not allowed: {path_str}")
-
-        return path_str
+    def normalize_path(file_path: str | Path) -> str:
+        """Return the canonical relative POSIX path used for stable IDs."""
+        return normalize_relative_path(file_path)
 
     @classmethod
-    def generate_file_id(cls, repository_id: str, relative_path: Path) -> str:
+    def generate_file_id(cls, repository_id: str, relative_path: str | Path) -> str:
         """Computes stable file_id: SHA256(repository_id + '|' + normalized_relative_path)."""
         normalized = cls.normalize_path(relative_path)
         raw = f"{repository_id}|{normalized}"

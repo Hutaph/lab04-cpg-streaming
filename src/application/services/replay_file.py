@@ -29,6 +29,8 @@ class ReplayFileService:
 
     def execute(self, relative_file_path: Path) -> dict[str, Any]:
         """Validates, parses, diffs, and executes event publish of a single replayed file."""
+        normalized_file_path = IdentifierGenerator.normalize_path(relative_file_path)
+        relative_file_path = Path(normalized_file_path)
         abs_path = self.repo_adapter.resolve_path(relative_file_path)
         if not abs_path.exists():
             raise FileNotFoundError(f"Source file to replay does not exist: {abs_path}")
@@ -40,7 +42,7 @@ class ReplayFileService:
         source_file = SourceFile(
             repository_id=self.repository_id,
             repository_root=str(self.repo_adapter.resolve_path(Path(""))),
-            relative_path=relative_file_path.as_posix(),
+            relative_path=normalized_file_path,
             commit_sha=commit_sha,
             size_bytes=size,
         )
@@ -76,7 +78,7 @@ class ReplayFileService:
         res = self.process_file_service.execute(source_file)
 
         return {
-            "file_path": relative_file_path.as_posix(),
+            "file_path": normalized_file_path,
             "status": res.status.value,
             "old_content_hash": old_hash,
             "new_content_hash": res.content_hash,

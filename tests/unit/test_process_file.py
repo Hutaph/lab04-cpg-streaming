@@ -1,6 +1,7 @@
 """Unit tests for ProcessFileService execution flows."""
 
 from unittest.mock import Mock
+from pathlib import Path
 import pytest
 from application.services.process_file import ProcessFileService
 from domain.models import SourceFile, FileState, ParsedFileGraph, FileMetadata
@@ -259,6 +260,64 @@ def test_syntax_error_emits_parser_error() -> None:
 
     # Verify state store was not committed
     state.commit.assert_not_called()
+
+
+def test_process_file_publishes_posix_file_path_for_windows_style_input() -> None:
+    """Verify process boundaries use the canonical POSIX file path."""
+    from domain.models import CodeNode
+
+    repo = Mock()
+    repo.read_file.return_value = b"x = 1"
+    state = Mock()
+    state.get.return_value = None
+
+    meta = FileMetadata("file_id", "test_repo", "src/task.py", "hash_abc", 5, 1, 0, 0, 0, 1, 0, 1, ParseStatus.SUCCESS)
+    node = CodeNode("node_id", "file_id", "Module", "Module", None, None, 1, 0, 1, 0)
+    parser = Mock()
+    parser.parse_file.return_value = ParsedFileGraph(
+        source_file=Mock(),
+        file_id="file_id",
+        content_hash="hash_abc",
+        nodes=[node],
+        edges=[],
+        metadata=meta,
+    )
+    validator = Mock()
+    writer = Mock()
+    published: list[dict] = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(repo, parser, state, validator, writer)
+    result = service.execute(SourceFile("test_repo", "root", "src\\task.py", "c1", 5))
+
+    assert result.file_path == "src/task.py"
+    assert {event["file_path"] for event in published} == {"src/task.py"}
+    repo.read_file.assert_called_once_with(Path("src/task.py"))
+    parser.parse_file.assert_called_once_with(Path("src/task.py"), b"x = 1", "c1")
+    state.commit.assert_called_once()
+    assert state.commit.call_args.args[1] == "src/task.py"
+
+
+def test_parser_error_event_uses_posix_file_path() -> None:
+    """Verify parser error events use the canonical POSIX file path."""
+    from domain.errors import ParsingError
+
+    repo = Mock()
+    repo.read_file.return_value = b"def broken(:\n"
+    state = Mock()
+    state.get.return_value = None
+    parser = Mock()
+    parser.parse_file.side_effect = ParsingError("Syntax error")
+    validator = Mock()
+    writer = Mock()
+    published: list[dict] = []
+    writer.publish_event.side_effect = lambda topic, key, evt: published.append(evt)
+
+    service = ProcessFileService(repo, parser, state, validator, writer)
+    result = service.execute(SourceFile("test_repo", "root", "pkg\\broken.py", "c1", 5))
+
+    assert result.file_path == "pkg/broken.py"
+    assert published[0]["file_path"] == "pkg/broken.py"
 
 
 def test_invalid_parser_error_event_is_not_published() -> None:

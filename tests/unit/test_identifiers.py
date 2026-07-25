@@ -2,13 +2,15 @@
 
 from pathlib import Path
 import pytest
-from parsing.identifiers import IdentifierGenerator
+from parsing.identifiers import IdentifierGenerator, normalize_relative_path
 
 
 def test_path_normalization() -> None:
     """Verify that backslashes are normalized to slashes and traversal is blocked."""
+    assert normalize_relative_path("pkg/new_feature.py") == "pkg/new_feature.py"
     assert IdentifierGenerator.normalize_path(Path("src\\foo\\bar.py")) == "src/foo/bar.py"
     assert IdentifierGenerator.normalize_path(Path("foo/bar.py")) == "foo/bar.py"
+    assert IdentifierGenerator.normalize_path("src//foo/./bar.py") == "src/foo/bar.py"
 
     with pytest.raises(ValueError):
         IdentifierGenerator.normalize_path(Path("../outside.py"))
@@ -16,6 +18,8 @@ def test_path_normalization() -> None:
         IdentifierGenerator.normalize_path(Path("foo/../../outside.py"))
     with pytest.raises(ValueError):
         IdentifierGenerator.normalize_path(Path("/absolute/path.py"))
+    with pytest.raises(ValueError):
+        IdentifierGenerator.normalize_path("C:\\repo\\foo.py")
 
 
 def test_file_id_deterministic() -> None:
@@ -34,6 +38,14 @@ def test_file_id_deterministic() -> None:
 
     # Verify path hash stays equal
     assert file_id_1 == IdentifierGenerator.generate_file_id(repo_id, path)
+
+
+def test_file_id_matches_for_posix_and_windows_style_paths() -> None:
+    """Verify separator aliases share the same stable file_id."""
+    repo_id = "huggingface/transformers-pr-agent"
+    assert IdentifierGenerator.generate_file_id(repo_id, "src/task.py") == IdentifierGenerator.generate_file_id(
+        repo_id, "src\\task.py"
+    )
 
 
 def test_node_id_stability() -> None:

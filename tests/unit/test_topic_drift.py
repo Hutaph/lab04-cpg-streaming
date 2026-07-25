@@ -5,7 +5,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(PROJECT_ROOT / "infra/kafka"))
 
-from create_topics import check_drift  # noqa: E402
+from create_topics import TOPICS_YAML, check_drift, load_desired_topics  # noqa: E402
 
 
 def test_check_drift_matching():
@@ -38,3 +38,14 @@ def test_check_drift_replication_mismatch():
     drift, logs = check_drift(desired, actual)
     assert drift
     assert any("Replication mismatch: desired 2, actual 1" in log for log in logs)
+
+
+def test_topic_contract_uses_configured_partitions():
+    desired = {topic["name"]: topic for topic in load_desired_topics(TOPICS_YAML)}
+
+    assert desired["cpg.nodes"]["partitions"] == 3
+    assert desired["cpg.edges"]["partitions"] == 3
+    assert desired["source.metadata"]["partitions"] == 1
+    assert desired["parser.errors"]["partitions"] == 1
+    assert desired["connector.errors"]["partitions"] == 1
+    assert desired["connector.errors"]["purpose"].lower().find("dead-letter") >= 0

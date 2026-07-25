@@ -13,6 +13,16 @@ def run_cmd(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess[s
     return subprocess.run(cmd, capture_output=True, text=True, check=check)
 
 
+def load_desired_topics(config_path: Path = TOPICS_YAML) -> list[dict]:
+    """Load desired Kafka topics from the project topic contract."""
+    with open(config_path, "r", encoding="utf-8") as f:
+        config_data = yaml.safe_load(f) or {}
+    desired_topics = config_data.get("topics", [])
+    if not isinstance(desired_topics, list):
+        raise ValueError("config/topics.yaml must define topics as a list.")
+    return desired_topics
+
+
 def wait_for_kafka():
     print("Waiting for Kafka broker to be healthy...")
     max_retries = 30
@@ -81,10 +91,7 @@ def check_drift(desired_topics: list[dict], actual_topics: dict) -> tuple[bool, 
 def main():
     wait_for_kafka()
 
-    # Load desired topics
-    with open(TOPICS_YAML, "r", encoding="utf-8") as f:
-        config_data = yaml.safe_load(f)
-    desired_topics = config_data.get("topics", [])
+    desired_topics = load_desired_topics(TOPICS_YAML)
 
     # Get actual topics describe output
     describe_res = run_cmd(

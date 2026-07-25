@@ -48,6 +48,19 @@ def test_sqlite_state_store_flow(tmp_path: Path) -> None:
     assert store.get(file_id) is None
 
 
+def test_sqlite_state_store_commits_posix_file_path(tmp_path: Path) -> None:
+    """Verify SQLite persists the canonical POSIX relative file path."""
+    db_file = tmp_path / "test_state.db"
+    store = SqliteStateStore(db_file, "repo")
+
+    store.commit("file_id", "src\\task.py", "hash", [], [], PARSER_VERSION, SCHEMA_VERSION)
+
+    with sqlite3.connect(str(db_file)) as conn:
+        stored_path = conn.execute("SELECT file_path FROM file_state WHERE file_id = ?", ("file_id",)).fetchone()[0]
+
+    assert stored_path == "src/task.py"
+
+
 def test_sqlite_state_store_migration_idempotent(tmp_path: Path) -> None:
     """Verify that migration is idempotent and doesn't fail if run twice or if table already exists."""
     db_file = tmp_path / "test_state.db"
