@@ -13,6 +13,7 @@ scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 sys.path.append(str(scripts_dir))
 
 import deploy_connectors  # noqa: E402
+from infrastructure.verification.kafka_connect import wait_for_zero_lag  # noqa: E402
 
 
 def run_cypher_query(query: str, password: str) -> list[list[str]]:
@@ -51,6 +52,48 @@ def run_cypher_query(query: str, password: str) -> list[list[str]]:
     except Exception as exc:
         print(f"Failed to run cypher: {exc}", file=sys.stderr)
         return []
+
+
+def restart_kafka_connect_worker() -> None:
+    """Restart Kafka Connect without changing source topic data or consumer offsets."""
+    subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            ".env",
+            "-f",
+            "infra/docker-compose.yml",
+            "-f",
+            "infra/docker-compose.neo4j.yml",
+            "restart",
+            "kafka-connect",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    deadline = time.monotonic() + 90.0
+    while time.monotonic() < deadline:
+        try:
+            code, _ = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors")
+            if code == 200:
+                return
+        except Exception:
+            pass
+        time.sleep(2.0)
+    raise TimeoutError("Kafka Connect REST API did not become ready after restart")
+
+
+def wait_for_edges_lag_zero_with_restart() -> None:
+    """Wait for edge sink lag to clear, restarting the worker once for retry backlogs."""
+    try:
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=30)
+        return
+    except TimeoutError:
+        restart_kafka_connect_worker()
+        deploy_connectors.main()
+        wait_for_zero_lag("connect-neo4j-edges-sink", timeout=90)
 
 
 @pytest.mark.neo4j
@@ -1546,7 +1589,8 @@ def test_mixed_batch_dlq_isolation(kafka_producer: Producer, env_vars: dict[str,
     # Assert invalid record reached DLQ — poll with timeout
     dlq_msg = dlq_consumer.poll(timeout=10.0)
     assert dlq_msg is not None, f"Invalid mixed-batch record must reach DLQ (run_id={run_id})"
-    assert dlq_consumer.poll(timeout=1.0) is not None or True  # drain; DLQ msg confirmed above
+    while dlq_consumer.poll(timeout=0.2) is not None:
+        pass
 
     # Connector and tasks remain RUNNING (errors.tolerance=all prevents crash)
     code, status = deploy_connectors.make_request("http://localhost:8083/connectors/neo4j-edges-sink/status")
@@ -1592,5 +1636,7 @@ def test_mixed_batch_dlq_isolation(kafka_producer: Producer, env_vars: dict[str,
         neo4j_password,
     )
     assert res_b_replay[1][0] == "1", "Replay of B must not create duplicate"
+
+    wait_for_edges_lag_zero_with_restart()
 
     dlq_consumer.close()

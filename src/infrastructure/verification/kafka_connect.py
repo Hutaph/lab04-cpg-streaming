@@ -8,7 +8,7 @@ import json
 import subprocess
 import time
 import urllib.request
-from typing import Any
+from typing import Any, cast
 
 
 def make_request(url: str, method: str = "GET", data: Any = None) -> tuple[int, Any]:
@@ -51,7 +51,9 @@ def get_connector_status(connector_name: str) -> dict[str, Any]:
     code, res = make_request(f"http://localhost:8083/connectors/{connector_name}/status")
     if code != 200:
         raise RuntimeError(f"Failed to query status of connector '{connector_name}': {res}")
-    return res
+    if not isinstance(res, dict):
+        raise RuntimeError(f"Connector '{connector_name}' returned a non-object status payload: {res}")
+    return cast(dict[str, Any], res)
 
 
 def assert_connector_running(connector_name: str) -> None:
