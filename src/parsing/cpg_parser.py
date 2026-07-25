@@ -30,6 +30,8 @@ class CpgParser:
 
         Raises ParsingError if a SyntaxError occurs.
         """
+        normalized_file_path = IdentifierGenerator.normalize_path(relative_path)
+        relative_path = Path(normalized_file_path)
         source_text = source_code.decode("utf-8", errors="replace")
         file_id = IdentifierGenerator.generate_file_id(self.repository_id, relative_path)
         content_hash = IdentifierGenerator.generate_content_hash(source_code)
@@ -79,7 +81,7 @@ class CpgParser:
             source_code=source_code,
             file_id=file_id,
             repository_id=self.repository_id,
-            file_path=str(relative_path),
+            file_path=normalized_file_path,
             content_hash=content_hash,
             node_count=len(unique_nodes),
             edge_count=len(unique_edges),
@@ -90,7 +92,7 @@ class CpgParser:
         source_file = SourceFile(
             repository_id=self.repository_id,
             repository_root="",
-            relative_path=str(relative_path),
+            relative_path=normalized_file_path,
             commit_sha=commit_sha,
             size_bytes=len(source_code),
         )
