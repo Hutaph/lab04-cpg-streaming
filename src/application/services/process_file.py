@@ -56,6 +56,7 @@ class ProcessFileService:
     def execute(self, source_file: SourceFile) -> ProcessingResult:
         """Parses a single file, publishes events to target destination, and commits SQLite state."""
         relative_path = Path(source_file.relative_path)
+        relative_path_text = relative_path.as_posix()
 
         # 1. Read raw source bytes strict
         try:
@@ -81,7 +82,7 @@ class ProcessFileService:
             return ProcessingResult(
                 status=ParseStatus.SKIPPED_UNCHANGED,
                 file_id=file_id,
-                file_path=str(relative_path),
+                file_path=relative_path_text,
                 content_hash=content_hash,
                 node_count=0,
                 edge_count=0,
@@ -102,7 +103,7 @@ class ProcessFileService:
             repository_id=source_file.repository_id,
             commit_sha=source_file.commit_sha,
             file_id=file_id,
-            file_path=str(relative_path),
+            file_path=relative_path_text,
             content_hash=content_hash,
             parser_version=PARSER_VERSION,
             schema_version=SCHEMA_VERSION,
@@ -113,7 +114,7 @@ class ProcessFileService:
             repository_id=source_file.repository_id,
             commit_sha=source_file.commit_sha,
             file_id=file_id,
-            file_path=str(relative_path),
+            file_path=relative_path_text,
             content_hash=delete_hash,
             parser_version=PARSER_VERSION,
             schema_version=SCHEMA_VERSION,
@@ -201,13 +202,13 @@ class ProcessFileService:
         node_ids = [n.node_id for n in current_graph.nodes]
         edge_ids = [e.edge_id for e in current_graph.edges]
         self.state_store.commit(
-            file_id, str(relative_path), content_hash, node_ids, edge_ids, PARSER_VERSION, SCHEMA_VERSION
+            file_id, relative_path_text, content_hash, node_ids, edge_ids, PARSER_VERSION, SCHEMA_VERSION
         )
 
         return ProcessingResult(
             status=ParseStatus.SUCCESS,
             file_id=file_id,
-            file_path=str(relative_path),
+            file_path=relative_path_text,
             content_hash=content_hash,
             node_count=len(unique_items(node_ids)),
             edge_count=len(unique_items(edge_ids)),
@@ -223,13 +224,14 @@ class ProcessFileService:
     ) -> ProcessingResult:
         """Logs PARSER_ERROR event, validates, publishes, and avoids state commit."""
         relative_path = Path(source_file.relative_path)
+        relative_path_text = relative_path.as_posix()
         file_id = IdentifierGenerator.generate_file_id(source_file.repository_id, relative_path)
 
         factory = EventFactory(
             repository_id=source_file.repository_id,
             commit_sha=source_file.commit_sha,
             file_id=file_id,
-            file_path=str(relative_path),
+            file_path=relative_path_text,
             content_hash=content_hash,
             parser_version=PARSER_VERSION,
             schema_version=SCHEMA_VERSION,
@@ -261,7 +263,7 @@ class ProcessFileService:
         return ProcessingResult(
             status=ParseStatus.FAILED,
             file_id=file_id,
-            file_path=str(relative_path),
+            file_path=relative_path_text,
             content_hash=content_hash,
             node_count=0,
             edge_count=0,

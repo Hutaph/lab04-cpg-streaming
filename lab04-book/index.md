@@ -29,7 +29,7 @@ flowchart LR
     Kafka --> Mongo
 ```
 
-Sơ đồ chi tiết hơn nằm ở chương [Sơ đồ kiến trúc](architecture_diagram.ipynb). Các chương Task 1-4 trình bày runtime evidence cho discovery, parser, Kafka và Neo4j graph ingestion.
+Sơ đồ chi tiết hơn nằm ở chương [Sơ đồ kiến trúc](architecture_diagram.ipynb). Các chương Task 1-6 trình bày runtime evidence cho discovery, parser, Kafka, Neo4j graph ingestion, Spark/MongoDB metadata ingestion và modified-file replay.
 
 ## Repository thực nghiệm
 
@@ -60,7 +60,8 @@ Các số liệu discovery được tạo từ repository root. Eligible parser 
 - Task 2 chứng minh parser có thể xử lý smoke sample bằng bounded-memory flow và stable IDs.
 - Task 3 xác minh bốn Parser Service topics với Kafka key bằng `file_id`.
 - Task 4 xác minh graph events được ingest trực tiếp vào Neo4j, lag trở về 0 và các kiểm tra duplicate/null/placeholder pass trong scenario đã chạy.
-- Task 5 và Task 6 giữ nhánh metadata/replay cho phần còn lại của pipeline.
+- Task 5 xác minh metadata được Spark Structured Streaming consume từ Kafka, ghi/upsert vào MongoDB và resume bằng checkpoint.
+- Task 6 xác minh replay một file đã sửa cập nhật Neo4j/MongoDB mà không tạo duplicate và Spark checkpoint không đọc lại offset cũ.
 
 ## Cách đọc báo cáo
 
