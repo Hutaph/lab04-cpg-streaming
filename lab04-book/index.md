@@ -75,3 +75,7 @@ Các số liệu discovery được tạo từ repository root. Eligible parser 
 ## Cách đọc báo cáo
 
 Nên đọc chương kiến trúc trước để nắm luồng tổng thể, sau đó đi theo Task 1 đến Task 6. Các notebook chứa executed cells và cached outputs; những smoke run trong notebook được dùng để tạo evidence gọn và có thể tái hiện, không được diễn giải thành full Kafka publish nếu notebook không chạy full mode.
+
+## Liên kết
+
+GitHub repository: [Hutaph/lab04-cpg-streaming](https://github.com/Hutaph/lab04-cpg-streaming)
