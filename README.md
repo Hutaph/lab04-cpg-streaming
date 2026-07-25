@@ -2,6 +2,14 @@
 
 Đồ án môn Nhập môn Dữ liệu lớn xây dựng pipeline streaming tăng dần để trích xuất Code Property Graph (CPG) từ repository Python, publish event qua Kafka và ingest song song vào Neo4j và MongoDB.
 
+Thành viên:
+
+| MSSV | Họ và tên |
+|---|---|
+| 23120318 | Trương Quang Phát |
+| 23120329 | Châu Huỳnh Phúc |
+| 23120334 | Huỳnh Tấn Phước |
+
 ## Tổng quan
 
 Hệ thống phân tích repository `huggingface/transformers-pr-agent` tại commit cố định, tạo manifest discovery, parse từng file Python hợp lệ, sau đó phát các event đã validate schema vào Kafka. Graph topology được ghi trực tiếp vào Neo4j bằng Kafka Connect Sink; metadata file được ghi vào MongoDB bằng Spark Structured Streaming.
@@ -237,17 +245,8 @@ Báo cáo chính thức nằm trong [lab04-book/](lab04-book/) và được xu�
 
 | Hạng mục | Giá trị |
 |---|---|
-| Nhóm thực hiện | Nhóm PPP |
 | GitHub repository | [Hutaph/lab04-cpg-streaming](https://github.com/Hutaph/lab04-cpg-streaming) |
 | Jupyter Book site | [hutaph.github.io/lab04-cpg-streaming](https://hutaph.github.io/lab04-cpg-streaming/) |
-
-Thành viên:
-
-| MSSV | Họ và tên |
-|---|---|
-| 23120318 | Trương Quang Phát |
-| 23120329 | Châu Huỳnh Phúc |
-| 23120334 | Huỳnh Tấn Phước |
 
 Các chương chính:
 
