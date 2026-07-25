@@ -13,7 +13,9 @@ scripts_dir = Path(__file__).parent.parent.parent / "scripts"
 sys.path.append(str(scripts_dir))
 
 import deploy_connectors  # noqa: E402
-from infrastructure.verification.kafka_connect import wait_for_zero_lag  # noqa: E402
+from infrastructure.verification.kafka_connect import get_connector_lag, wait_for_zero_lag  # noqa: E402
+
+KAFKA_CONNECT_RESTART_FALLBACK_COUNT = 0
 
 
 def run_cypher_query(query: str, password: str) -> list[list[str]]:
@@ -56,6 +58,20 @@ def run_cypher_query(query: str, password: str) -> list[list[str]]:
 
 def restart_kafka_connect_worker() -> None:
     """Restart Kafka Connect without changing source topic data or consumer offsets."""
+    global KAFKA_CONNECT_RESTART_FALLBACK_COUNT
+    KAFKA_CONNECT_RESTART_FALLBACK_COUNT += 1
+    before_nodes = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors/neo4j-nodes-sink/status")
+    before_edges = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors/neo4j-edges-sink/status")
+    print(
+        "Kafka Connect fallback restart requested: "
+        f"count={KAFKA_CONNECT_RESTART_FALLBACK_COUNT} "
+        f"nodes_status={before_nodes[0]} "
+        f"edges_status={before_edges[0]} "
+        f"nodes_state={before_nodes[1].get('connector', {}).get('state', 'UNKNOWN') if isinstance(before_nodes[1], dict) else 'UNKNOWN'} "
+        f"edges_state={before_edges[1].get('connector', {}).get('state', 'UNKNOWN') if isinstance(before_edges[1], dict) else 'UNKNOWN'} "
+        f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
+        f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
+    )
     subprocess.run(
         [
             "docker",
@@ -78,6 +94,13 @@ def restart_kafka_connect_worker() -> None:
         try:
             code, _ = deploy_connectors.make_request(f"{deploy_connectors.CONNECT_URL}/connectors")
             if code == 200:
+                print(
+                    "Kafka Connect fallback restart completed: "
+                    f"nodes_state={deploy_connectors.get_connector_status('neo4j-nodes-sink').get('connector', {}).get('state', 'UNKNOWN')} "
+                    f"edges_state={deploy_connectors.get_connector_status('neo4j-edges-sink').get('connector', {}).get('state', 'UNKNOWN')} "
+                    f"nodes_lag={get_connector_lag('connect-neo4j-nodes-sink')} "
+                    f"edges_lag={get_connector_lag('connect-neo4j-edges-sink')}"
+                )
                 return
         except Exception:
             pass
