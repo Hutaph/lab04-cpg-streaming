@@ -145,14 +145,14 @@ Mọi thay đổi nghiệp vụ hoặc adapter phải đi kèm kiểm thử và 
 | **Neo4j idempotency** | Sử dụng Cypher MERGE để ghi đè thay vì tạo mới | `infra/kafka-connect/connectors/*.json` | Số lượng bản ghi Neo4j không tăng khi chạy replay | **Docker E2E verified** |
 | **Spark Streaming** | Job Spark consume metadata từ Kafka theo cơ chế streaming | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Dataframe streaming lọc `FILE_METADATA_UPSERT` từ topic `source.metadata` | **Docker E2E verified** |
 | **MongoDB Connector** | Ghi dữ liệu từ Spark Structured Streaming sang MongoDB | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | Writer MongoDB dùng `replace`/`upsertDocument` theo `file_id` | **Docker E2E verified** |
-| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | `checkpointLocation` trỏ tới `workspace/checkpoints/spark` | **Docker E2E verified** |
+| **Spark checkpoint** | Cấu hình persistent directory để lưu offset Kafka | `spark_jobs/metadata_to_mongodb.py`, `lab04-book/task5_spark_mongodb.ipynb` | `checkpointLocation` theo `workspace/checkpoints/task5-notebook/<run_id>`; restart khôi phục Kafka offsets | **Docker E2E verified** |
 | **Modified-file replay**| Thay đổi nội dung file, parser re-run và cập nhật | [replay_file.py](../src/application/services/replay_file.py) | Log chạy replay hiển thị số lượng event cập nhật | **Docker E2E verified** |
 | **No duplication** | Replay không làm trùng lặp phần tử trên các databases | [replay_file.py](../src/application/services/replay_file.py) | Kiểm tra số lượng bản ghi DB bằng verify script | **Docker E2E verified** |
 | **Architecture diagram**| Vẽ sơ đồ kiến trúc hệ thống chi tiết | [system_architecture.md](system_architecture.md) | Mermaid diagram tích hợp trong tài liệu | **Book build verified** |
 | **Jupyter Book** | Biên dịch toàn bộ tài liệu báo cáo dạng sách | `lab04-book/myst.yml` | Thư mục `lab04-book/_build/html` được tạo | **Book build verified** |
 | **GitHub Pages** | Host Jupyter Book công khai | `.github/workflows/deploy.yml` | URL public hoạt động bình thường | **Book build verified** |
 | **Executed cells** | Chạy notebook lưu lại kết quả hiển thị | `lab04-book/*.ipynb` | Kết quả hiển thị in ra dưới mỗi cell | **Book build verified** |
-| **Screenshots** | Đính kèm hình ảnh hoặc embedded figure của kết quả database vào báo cáo | `lab04-book/task5_spark_mongodb.ipynb` | Figure runtime hiển thị luồng Kafka → Spark → MongoDB, document count và checkpoint artifacts | **Book build verified** |
+| **Screenshots** | Đính kèm hình ảnh hoặc embedded figure của kết quả database vào báo cáo | `lab04-book/task5_spark_mongodb.ipynb`, `lab04-book/assets/task5-mongo-express.png` | Mongo Express screenshot thật, document count và checkpoint artifacts | **Book build verified** |
 | **Reflection** | Viết đánh giá phản hồi ở cuối mỗi chapter | `lab04-book/*.ipynb` | Mục Reflection hiển thị ở cuối mỗi notebook | **Book build verified** |
 | **Meaningful commits** | Commit phản ánh tiến độ chi tiết của nhóm | Git history | Lịch sử commit chứa mã [Task N] tăng dần | **Verified** |
 

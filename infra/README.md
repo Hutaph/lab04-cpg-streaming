@@ -91,8 +91,17 @@ Sau khi dịch vụ khởi chạy, thực hiện các bước sau để thiết 
 ### 4. Khởi chạy MongoDB (cho Task 5)
 
 ```bash
-docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb
+docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb mongo-express
 ```
+
+Mongo Express là giao diện kiểm tra tùy chọn cho local development, truy cập tại
+`http://localhost:8081`. Service này kết nối tới MongoDB nội bộ bằng hostname
+`mongodb`, còn các lệnh chạy từ host vẫn dùng `localhost:27017`. Mongo Express
+không thay thế các assertion/query tự động trong notebook Task 5.
+
+Task 5 dùng đúng topology Kafka KRaft ở trên: Compose không khởi chạy
+ZooKeeper. Notebook sẽ tạo các topic parser còn thiếu khi cần, nhưng có thể tạo
+toàn bộ topic trước bằng `./scripts/create_topics.sh`.
 
 ## Dừng hạ tầng
 
