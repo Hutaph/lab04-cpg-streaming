@@ -95,8 +95,6 @@ Chi tiết đầy đủ về port, endpoint host/container và connector deploym
 | `parser.errors` | Parser Service business error events |
 | `connector.errors` | Kafka Connect dead-letter topic |
 
-Task 4 chỉ xử lý graph path Kafka Connect -> Neo4j. Spark không ghi graph vào Neo4j.
-
 ## Prerequisites
 
 Máy local cần có các công cụ sau trước khi chạy lab:
@@ -127,8 +125,6 @@ Cập nhật tối thiểu các biến sau trong `.env`:
 | `NEO4J_PASSWORD` | Mật khẩu user `neo4j` cho Neo4j và Kafka Connect Sink |
 | `MONGO_ROOT_PASSWORD` | Mật khẩu root cho MongoDB |
 | `MONGODB_URI` | URI MongoDB dùng cùng mật khẩu đã đặt |
-
-Không commit `.env` hoặc credential thật. Các biến mẫu và endpoint mặc định nằm trong [.env.example](.env.example).
 
 ## Quick start
 
