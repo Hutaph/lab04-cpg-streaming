@@ -17,7 +17,7 @@ def test_producer_publish_and_flush_success() -> None:
     producer.flush()
 
     mock_raw_producer.produce.assert_called_once()
-    mock_raw_producer.flush.assert_called_once_with(timeout=10.0)
+    mock_raw_producer.flush.assert_called_once_with(timeout=60.0)
 
 
 def test_producer_buffer_error_handling() -> None:

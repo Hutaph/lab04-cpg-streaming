@@ -1,36 +1,93 @@
 # Lab 04: Incremental Code Property Graph Streaming Pipeline
 
-Đồ án thực hành môn Nhập môn Dữ liệu lớn: Xây dựng pipeline streaming tăng dần (incremental) để trích xuất Code Property Graph (CPG) từ repository Python, gửi sự kiện qua Kafka và nạp dữ liệu song song vào Neo4j (Graph Database) và MongoDB (Document Database).
+Đồ án môn Nhập môn Dữ liệu lớn xây dựng pipeline streaming tăng dần để trích xuất Code Property Graph (CPG) từ repository Python, publish event qua Kafka và ingest song song vào Neo4j và MongoDB.
 
----
+## Tổng quan
 
-## 1. Tổng quan Dự án
-- **Repository nguồn phân tích**: `huggingface/transformers-pr-agent` (shallow clone tại runtime vào thư mục `workspace/source/`).
-- **Mục tiêu**: Phân tích cú pháp sinh AST, CFG, DFG, Call graph từ mã nguồn Python để phục vụ phân tích tĩnh, xử lý streaming thời gian thực.
-- **Tiến độ Hiện tại**:
-  - **Task 1 & Task 2**: Hoàn thành và kiểm chứng (Shallow clone, Discovery, CPG Parser Service với stable deterministic ID, dry-run JSONL output).
-  - **Task 3 (Kafka Ingestion)**: Hoàn thành và kiểm chứng (Khởi chạy Kafka KRaft, khởi tạo topics tự động, live-mode stream CPG events lên Kafka với key là `file_id` và xác minh cấu trúc/phân vùng).
-  - **Task 4 (Neo4j Ingestion)**: Hoàn thành và kiểm chứng (Neo4j Kafka Sink Connector với Cypher FOREACH rẽ nhánh, cơ chế Node/Edge Tombstone chống stale resurrection, mixed-batch DLQ isolation, idempotent replay).
-  - **Task 5 (Spark/MongoDB Ingestion)**: Hoàn thành và kiểm chứng (Spark Structured Streaming ghi metadata vào MongoDB bằng Docker).
-  - **Task 6 (Idempotent Replay Verification)**: Hoàn thành và kiểm chứng (Xác minh cơ chế chạy lại tăng dần và kháng trùng lặp đầu cuối).
+Hệ thống phân tích repository `huggingface/transformers-pr-agent` tại commit cố định, tạo manifest discovery, parse từng file Python hợp lệ, sau đó phát các event đã validate schema vào Kafka. Graph topology được ghi trực tiếp vào Neo4j bằng Kafka Connect Sink; metadata file được ghi vào MongoDB bằng Spark Structured Streaming.
 
----
+```mermaid
+flowchart LR
+    Repo["Source repository"]
+    Discovery["Discovery + manifest"]
+    Parser["Incremental Parser"]
+    Kafka["Kafka"]
 
-## 2. Hướng dẫn Khởi chạy nhanh (Quick Start)
+    Repo --> Discovery --> Parser --> Kafka
 
-### Bước 1: Cài đặt và đồng bộ môi trường
-```bash
-uv sync --all-extras
+    Kafka --> Connect["Kafka Connect"]
+    Connect --> Neo4j["Neo4j"]
+
+    Kafka --> Spark["Spark Streaming"]
+    Spark --> Mongo["MongoDB"]
 ```
 
-### Bước 2: Chuẩn bị hạ tầng
-Điền `MONGO_ROOT_PASSWORD`, `MONGODB_URI` và `NEO4J_PASSWORD` trong `.env` (copy từ `.env.example`).
-Sau đó khởi động toàn bộ dịch vụ (Zookeeper-less Kafka KRaft, Neo4j, Kafka Connect, MongoDB):
+## Mục tiêu Lab 04
 
-**Linux / WSL:**
+- Clone hoặc tái sử dụng repository nguồn bằng snapshot có thể tái hiện.
+- Enumerate Python files từ repository root, áp dụng file filters và tạo manifest.
+- Xây dựng Parser Service xử lý từng file, sinh AST, CFG, DFG, call graph, metadata và parser errors.
+- Publish event vào Kafka theo topic contract rõ ràng.
+- Ghi graph node/edge vào Neo4j bằng Kafka Connect.
+- Ghi metadata vào MongoDB bằng Spark Structured Streaming.
+- Kiểm chứng replay tăng dần không tạo duplicate trong các kịch bản đã chạy.
+
+## Repository nguồn
+
+| Hạng mục | Giá trị |
+|---|---|
+| Repository | `huggingface/transformers-pr-agent` |
+| Pinned commit | `458c957fa1e8851825cd799f5d030876f0644194` |
+| Raw Python discovery records | 4.496 |
+| Eligible parser inputs | 2.963 |
+
+Raw discovery records là toàn bộ file `.py` được ghi nhận trong repository. Eligible parser inputs là các record còn lại sau khi loại tests, setup/build files và generated files theo `config/file_filters.yaml`.
+
+## Các task
+
+| Task | Nội dung |
+|---|---|
+| Task 1 | Clone repository và discovery file Python |
+| Task 2 | Incremental CPG Parser Service |
+| Task 3 | Kafka topics và event distribution |
+| Task 4 | Kafka Connect -> Neo4j |
+| Task 5 | Spark Structured Streaming -> MongoDB |
+| Task 6 | Modified-file replay verification |
+
+## Runtime services
+
+Hạ tầng local dùng Docker Compose:
+
+- Kafka KRaft cho event streaming.
+- Kafka Connect cho Neo4j sink connectors.
+- Neo4j cho graph topology.
+- MongoDB cho metadata documents.
+- Spark runtime cho Structured Streaming job.
+
+Chi tiết port, endpoint host/container và connector deployment nằm trong [infra/README.md](infra/README.md).
+
+## Topic layout
+
+| Topic | Vai trò |
+|---|---|
+| `cpg.nodes` | Node upsert/delete events |
+| `cpg.edges` | Edge upsert/delete events |
+| `source.metadata` | File metadata events cho Spark/MongoDB |
+| `parser.errors` | Parser Service business error events |
+| `connector.errors` | Kafka Connect dead-letter topic |
+
+Task 4 chỉ xử lý graph path Kafka Connect -> Neo4j. Spark không ghi graph vào Neo4j.
+
+## Quick start
+
 ```bash
+uv sync --all-extras
 cp -n .env.example .env
+```
 
+Khởi động hạ tầng:
+
+```bash
 docker compose \
   --env-file "$PWD/.env" \
   -f "$PWD/infra/docker-compose.yml" \
@@ -38,78 +95,78 @@ docker compose \
   up -d --build
 ```
 
-**Windows (PowerShell):**
-```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+Chuẩn bị source và manifest:
 
-docker compose `
-  --env-file .env `
-  -f infra/docker-compose.yml `
-  -f infra/docker-compose.neo4j.yml `
-  up -d --build
-```
-
-Chi tiết cấu hình và lệnh kiểm tra nằm trong [infra/README.md](infra/README.md).
-
-### Bước 3: Clone repository nguồn mục tiêu
 ```bash
 uv run lab04 clone-source
-```
-
-### Bước 4: Khảo sát danh sách file nguồn Python
-```bash
 uv run lab04 discover --scope final --manifest artifacts/manifests/source-files.jsonl
 ```
 
-### Bước 5: Khởi tạo Kafka topics
+Tạo Kafka topics:
+
 ```bash
 ./scripts/create_topics.sh
 ```
 
-### Bước 6: Chạy Parser dry-run thử nghiệm trên một tệp tin
+Chạy Parser dry-run:
+
 ```bash
-uv run lab04 parse-file --file tests/fixtures/reassignment.py --dry-run --clean-output --out-dir workspace/tmp/parser-output
+uv run lab04 parse-repository --scope smoke --dry-run --clean-output --out-dir workspace/tmp/parser-output
 ```
 
-### Bước 7: Chạy Parser ở live mode để publish events sang Kafka
+Chạy Parser publish Kafka smoke:
+
 ```bash
 uv run lab04 parse-repository --scope smoke --limit 5 --no-dry-run
 ```
 
-### Bước 8: Kiểm tra và xác minh dữ liệu trong Kafka
+## Jupyter Book
+
+Báo cáo chính thức nằm trong [lab04-book/](lab04-book/). Các chương chính:
+
+- [Sơ đồ kiến trúc](lab04-book/architecture_diagram.ipynb)
+- [Task 1](lab04-book/task1_clone_explore.ipynb)
+- [Task 2](lab04-book/task2_parser_service.ipynb)
+- [Task 3](lab04-book/task3_kafka_topics.ipynb)
+- [Task 4](lab04-book/task4_neo4j_sink.ipynb)
+- [Task 5](lab04-book/task5_spark_mongodb.ipynb)
+- [Task 6](lab04-book/task6_idempotent_replay.ipynb)
+
+Build tĩnh từ cached notebook outputs:
+
 ```bash
-uv run python scripts/inspect_kafka_events.py
+npx mystmd build --html --force
 ```
 
-### Bước 9: Chạy Spark metadata ingestion (Task 5)
-**Linux / WSL:**
-```bash
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
-SPARK_CHECKPOINT_PATH=workspace/checkpoints/spark \
-spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
-             spark_jobs/metadata_to_mongodb.py --available-now
-```
+## Testing và quality gates
 
-**Windows (PowerShell):**
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_metadata_to_mongodb.ps1 -AvailableNow
-```
-
-### Bước 10: Chạy bộ kiểm thử (Unit & Integration Tests)
 ```bash
-# Chạy unit tests
+git diff --check
+uv lock --check
+uv run python -m compileall -q src scripts spark_jobs
+uv run ruff check src tests scripts spark_jobs
+uv run ruff format --check src tests scripts spark_jobs
+MYPYPATH=src uv run mypy --explicit-package-bases src
 PYTHONPATH=src uv run pytest tests/unit -q
+```
 
-# Chạy integration tests (yêu cầu hạ tầng Docker đang chạy)
+Integration tests yêu cầu Docker services tương ứng đang chạy:
+
+```bash
 PYTHONPATH=src uv run pytest tests/integration -v
 ```
 
----
+## Cấu trúc thư mục chính
 
-## 3. Bản đồ Tài liệu dự án
-- **[AGENTS.md](AGENTS.md)**: Hướng dẫn cấu trúc, ngôn ngữ và các quy tắc bắt buộc cho AI Coding Agents.
-- **[docs/system_architecture.md](docs/system_architecture.md)**: Tài liệu đặc tả kỹ thuật chi tiết nhất (Kiến trúc hệ thống, Stable ID, cấu trúc thư mục, quy tắc dependency, và 7 quyết định thiết kế).
-- **[docs/implementation_plan.md](docs/implementation_plan.md)**: Kế hoạch triển khai chi tiết 15 phases, ma trận truy vết yêu cầu, chiến lược kiểm thử và hướng dẫn nộp bài.
-- **[infra/README.md](infra/README.md)**: Hướng dẫn quản lý hạ tầng Docker (Kafka KRaft, Neo4j, MongoDB, Kafka Connect) và triển khai connector.
-- **[lab04-book/](lab04-book/)**: Báo cáo Jupyter Book chính thức (gồm Landing Page, chương Sơ đồ kiến trúc, và các chương chạy thực nghiệm từ Task 1 đến Task 6 kèm reflections).
+| Đường dẫn | Vai trò |
+|---|---|
+| `src/` | Parser application theo layered architecture |
+| `schemas/` | JSON Schema cho Kafka events |
+| `config/` | Topic, application và file filter config |
+| `infra/` | Docker Compose, Kafka Connect và database setup |
+| `spark_jobs/` | Spark Structured Streaming job |
+| `scripts/` | Utility scripts cho topics, connectors và verification |
+| `tests/` | Unit/integration tests |
+| `artifacts/manifests/` | Canonical discovery manifest |
+| `lab04-book/` | Báo cáo Jupyter Book |
+| `workspace/` | Runtime source clone, state, checkpoints và temporary outputs |

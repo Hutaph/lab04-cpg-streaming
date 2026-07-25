@@ -1,23 +1,53 @@
-# Configuration filters for repository discovery phase
+# Configuration filters for repository discovery phase.
+# Raw scope always enumerates every Python file from the repository root.
 
-smoke:
-  # Dry-run development filters (small scope)
-  max_files: 5
+raw:
   include:
-    - "src/**/*.py"
-  exclude:
-    - "**/tests/**"
-    - "**/__pycache__/**"
-    - "**/build/**"
+    - "**/*.py"
+  exclude: []
 
-final:
-  # Complete parsing scope for the final evaluation
+eligible:
   include:
     - "**/*.py"
   exclude:
-    - "**/__pycache__/**"
-    - "**/build/**"
-    - "**/generated/**"
-    - "**/vendor/**"
-    - "**/.venv/**"
-    # Tests are explicitly kept unless requested otherwise
+    - pattern: "**/tests/**"
+      reason: "Excluded test file"
+    - pattern: "tests/**"
+      reason: "Excluded test file"
+    - pattern: "**/test_*.py"
+      reason: "Excluded test file"
+    - pattern: "**/*_test.py"
+      reason: "Excluded test file"
+    - pattern: "**/conftest.py"
+      reason: "Excluded test support file"
+    - pattern: "setup.py"
+      reason: "Excluded setup/build file"
+    - pattern: "**/setup.py"
+      reason: "Excluded setup/build file"
+    - pattern: "**/setup_*.py"
+      reason: "Excluded setup/build file"
+    - pattern: "**/build/**"
+      reason: "Excluded setup/build output"
+    - pattern: "**/__pycache__/**"
+      reason: "Excluded generated cache file"
+    - pattern: "**/generated/**"
+      reason: "Excluded generated file"
+    - pattern: "**/*_pb2.py"
+      reason: "Excluded generated protobuf file"
+    - pattern: "**/*_pb2_grpc.py"
+      reason: "Excluded generated protobuf file"
+    - pattern: "**/vendor/**"
+      reason: "Excluded vendored dependency file"
+    - pattern: "**/.venv/**"
+      reason: "Excluded virtual environment file"
+
+final:
+  # Full parser scope. This is an alias of the eligible repository-wide scope.
+  extends: eligible
+
+smoke:
+  # Deterministic bounded sample for notebook and CLI verification.
+  extends: eligible
+  max_files: 5
+  include:
+    - "src/**/*.py"
