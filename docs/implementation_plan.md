@@ -10,8 +10,8 @@ Tài liệu này mô tả trạng thái triển khai hiện tại của các tas
 | Task 2 | Verified locally | Parser smoke run, schema validation, stable IDs, incremental skip |
 | Task 3 | Verified with Kafka | Topic layout, Kafka key, schema validation, fresh publish, skip, parser error routing |
 | Task 4 | Verified with Kafka Connect/Neo4j | Connector state, lag 0, graph integrity, DLQ delta, replay-safe checks |
-| Task 5 | Hardening complete; runtime pending MongoDB preflight | Spark Structured Streaming metadata ingestion và checkpoint evidence |
-| Task 6 | Hardening complete; runtime pending MongoDB preflight | Modified-file replay và duplicate checks |
+| Task 5 | Hardening complete; runtime pending downstream regression gate | Spark Structured Streaming metadata ingestion và checkpoint evidence |
+| Task 6 | Hardening complete; runtime pending Neo4j regression gate | Modified-file replay và duplicate checks |
 
 ## Task 1 — Repository discovery
 

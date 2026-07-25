@@ -9,6 +9,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import which
 from urllib.parse import parse_qs, quote, urlparse
 
 
@@ -23,6 +24,8 @@ class MongoConfig:
     username: str
     password: str
     host: str
+    container_host: str
+    container_name: str
     auth_source: str
     database: str
     collection: str
@@ -37,7 +40,7 @@ class MongoConfig:
         return _build_uri(self.username, self.password, self.host, self.auth_source)
 
     def container_uri(self) -> str:
-        return _build_uri(self.username, self.password, "cpg-mongodb:27017", self.auth_source)
+        return _build_uri(self.username, self.password, self.container_host, self.auth_source)
 
 
 def load_env_file(path: Path) -> None:
@@ -52,7 +55,7 @@ def load_env_file(path: Path) -> None:
         os.environ.setdefault(name.strip(), value.strip().strip('"').strip("'"))
 
 
-def load_config() -> MongoConfig:
+def load_config(args: argparse.Namespace | None = None) -> MongoConfig:
     """Resolve MongoDB config and verify that the URI matches root credentials."""
     load_env_file(PROJECT_ROOT / ".env")
     username = os.environ.get("MONGO_ROOT_USERNAME", "root")
@@ -60,6 +63,19 @@ def load_config() -> MongoConfig:
     uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/?authSource=admin")
     parsed = urlparse(uri)
     host = parsed.netloc.rsplit("@", maxsplit=1)[-1] or "localhost:27017"
+    if args and args.host_port:
+        host = f"localhost:{args.host_port}"
+    elif os.environ.get("MONGODB_HOST_PORT"):
+        host = f"localhost:{os.environ['MONGODB_HOST_PORT']}"
+    container_host = os.environ.get("MONGODB_CONTAINER_HOST", "cpg-mongodb")
+    container_port = os.environ.get("MONGODB_CONTAINER_PORT", "27017")
+    container_name = os.environ.get("MONGODB_CONTAINER_NAME", "cpg-mongodb")
+    if args and args.container_host:
+        container_host = args.container_host
+    if args and args.container_port:
+        container_port = str(args.container_port)
+    if args and args.container_name:
+        container_name = args.container_name
     query = parse_qs(parsed.query)
     auth_source = query.get("authSource", [""])[0]
     uri_username = parsed.username or ""
@@ -72,7 +88,16 @@ def load_config() -> MongoConfig:
         raise ValueError("MONGODB_URI username does not match MONGO_ROOT_USERNAME.")
     if auth_source != "admin":
         raise ValueError("MONGODB_URI must include authSource=admin.")
-    return MongoConfig(username, password, host, auth_source, database, collection)
+    return MongoConfig(
+        username,
+        password,
+        host,
+        f"{container_host}:{container_port}",
+        container_name,
+        auth_source,
+        database,
+        collection,
+    )
 
 
 def _build_uri(username: str, password: str, host: str, auth_source: str) -> str:
@@ -83,7 +108,10 @@ def _build_uri(username: str, password: str, host: str, auth_source: str) -> str
 
 def run_command(command: list[str], timeout: int = 30) -> subprocess.CompletedProcess[str]:
     """Run a command and capture output for PASS/FAIL decisions."""
-    return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    try:
+        return subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(command, 124, exc.stdout or "", exc.stderr or "Command timed out.")
 
 
 def container_running(name: str) -> bool:
@@ -108,13 +136,13 @@ def docker_network_name(anchor_container: str = "cpg-kafka") -> str:
     return "infra_default"
 
 
-def mongosh_eval(uri: str, javascript: str) -> tuple[bool, str]:
-    """Run mongosh from the MongoDB container without exposing credentials."""
+def mongosh_eval(container_name: str, uri: str, javascript: str) -> tuple[bool, str]:
+    """Run mongosh from the selected MongoDB container without exposing credentials."""
     result = run_command(
         [
             "docker",
             "exec",
-            "cpg-mongodb",
+            container_name,
             "mongosh",
             uri,
             "--quiet",
@@ -125,10 +153,35 @@ def mongosh_eval(uri: str, javascript: str) -> tuple[bool, str]:
     return result.returncode == 0, result.stdout.strip() or result.stderr.strip()
 
 
+def host_mongosh_eval(uri: str, javascript: str) -> tuple[bool, str]:
+    """Run mongosh against the host endpoint without exposing credentials."""
+    if which("mongosh"):
+        result = run_command(["mongosh", uri, "--quiet", "--eval", javascript])
+    else:
+        result = run_command(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                "host",
+                "mongo:6.0.4",
+                "mongosh",
+                uri,
+                "--quiet",
+                "--eval",
+                javascript,
+            ],
+            timeout=60,
+        )
+    return result.returncode == 0, result.stdout.strip() or result.stderr.strip()
+
+
 def check_indexes(config: MongoConfig) -> tuple[bool, set[str]]:
     """Verify that the metadata collection has the required unique indexes."""
     ok, output = mongosh_eval(
-        config.host_uri(),
+        config.container_name,
+        config.container_uri(),
         (
             f"const dbh=db.getSiblingDB('{config.database}');"
             f"print(JSON.stringify(dbh.{config.collection}.getIndexes().map(i => i.name)));"
@@ -151,31 +204,33 @@ def print_status(name: str, passed: bool) -> None:
 
 def run_preflight() -> int:
     """Run all MongoDB preflight checks."""
+    args = build_argument_parser().parse_args()
     try:
-        config = load_config()
+        config = load_config(args)
     except ValueError as exc:
         print(f"config: FAIL ({exc})")
         return 1
 
     print(f"host={config.host}")
-    print("container_host=cpg-mongodb:27017")
+    print(f"container_host={config.container_host}")
+    print(f"container_name={config.container_name}")
     print(f"database={config.database}")
     print(f"collection={config.collection}")
     print(f"authSource={config.auth_source}")
     print(f"username={config.masked_username}")
 
-    running = container_running("cpg-mongodb")
+    running = container_running(config.container_name)
     print_status("container_running", running)
     if not running:
         return 1
 
-    host_auth, _ = mongosh_eval(config.host_uri(), "db.adminCommand({ ping: 1 });")
+    host_auth, _ = host_mongosh_eval(config.host_uri(), "db.adminCommand({ ping: 1 });")
     print_status("host_authentication", host_auth)
 
-    database_access, _ = mongosh_eval(config.host_uri(), f"db.getSiblingDB('{config.database}').stats();")
+    database_access, _ = host_mongosh_eval(config.host_uri(), f"db.getSiblingDB('{config.database}').stats();")
     print_status("database_accessible", database_access)
 
-    collection_access, _ = mongosh_eval(
+    collection_access, _ = host_mongosh_eval(
         config.host_uri(),
         f"db.getSiblingDB('{config.database}').{config.collection}.countDocuments({{}});",
     )
@@ -184,7 +239,7 @@ def run_preflight() -> int:
     indexes_ok, _ = check_indexes(config)
     print_status("required_indexes", indexes_ok)
 
-    container_auth, _ = mongosh_eval(config.container_uri(), "db.adminCommand({ ping: 1 });")
+    container_auth, _ = mongosh_eval(config.container_name, config.container_uri(), "db.adminCommand({ ping: 1 });")
     print_status("container_network_authentication", container_auth)
 
     spark_resolve = run_command(
@@ -194,10 +249,9 @@ def run_preflight() -> int:
             "--rm",
             "--network",
             docker_network_name(),
-            "apache/spark-py:v3.3.0",
-            "getent",
-            "hosts",
-            "cpg-mongodb",
+            "busybox:1.36",
+            "nslookup",
+            config.container_host.split(":", maxsplit=1)[0],
         ],
         timeout=60,
     )
@@ -209,12 +263,16 @@ def run_preflight() -> int:
 
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build CLI parser."""
-    return argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host-port", help="Host-side MongoDB port, for example 27018.")
+    parser.add_argument("--container-host", help="Docker-network MongoDB hostname.")
+    parser.add_argument("--container-port", default=None, help="Docker-network MongoDB port.")
+    parser.add_argument("--container-name", help="Docker container name used for mongosh.")
+    return parser
 
 
 def main() -> None:
     """Execute preflight checks."""
-    build_argument_parser().parse_args()
     sys.exit(run_preflight())
 
 

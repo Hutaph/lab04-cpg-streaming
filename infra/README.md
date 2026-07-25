@@ -125,6 +125,26 @@ Trước khi chạy evidence live, dùng `uv run python scripts/preflight_mongod
 
 Stack canonical cho nhánh metadata/replay là Spark 3.3.0, Scala 2.12, `spark-sql-kafka-0-10_2.12:3.3.0` và `mongo-spark-connector_2.12:10.1.1`.
 
+Nếu volume mặc định `infra_mongodb_data` đã được initialize bằng credential cũ, không xóa volume đó. Dùng service cô lập cho Task 5-6:
+
+```bash
+docker compose \
+  --env-file .env \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.mongodb-task56.yml \
+  up -d mongodb-task56
+```
+
+Service này dùng container `cpg-mongodb-task56`, host port `27018`, container host `cpg-mongodb-task56:27017` và named volume logical `mongodb_task56_data` do Compose quản lý. Chạy preflight endpoint cô lập:
+
+```bash
+MONGODB_HOST_PORT=27018 \
+MONGODB_CONTAINER_HOST=cpg-mongodb-task56 \
+MONGODB_CONTAINER_PORT=27017 \
+MONGODB_CONTAINER_NAME=cpg-mongodb-task56 \
+uv run python scripts/preflight_mongodb.py
+```
+
 ## Readiness checks
 
 Kafka topics:
