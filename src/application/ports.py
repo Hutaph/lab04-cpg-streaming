@@ -20,6 +20,18 @@ class SourceRepositoryPort(Protocol):
         """Lists paths to all eligible files inside the source root."""
         ...
 
+    def list_python_files(self, source_root: Path | None = None) -> list[Path]:
+        """Lists every Python file inside the repository tree before filtering."""
+        ...
+
+    def get_exclusion_reason(self, relative_path: Path, scope: str) -> str | None:
+        """Returns the configured exclusion reason for a repository-relative file path."""
+        ...
+
+    def get_scope_limit(self, scope: str) -> int | None:
+        """Returns the deterministic file limit configured for a scope, if any."""
+        ...
+
     def read_file(self, relative_path: Path) -> bytes:
         """Reads raw bytes of a file from the repository path."""
         ...

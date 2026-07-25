@@ -86,7 +86,7 @@ def clone_source(
 
 @app.command()
 def discover(
-    scope: str = typer.Option("final", help="File filter scope: final or smoke"),
+    scope: str = typer.Option("final", help="File filter scope: raw, eligible, final, or smoke"),
     manifest: Path = typer.Option(
         Path("artifacts/manifests/source-files.jsonl"), help="Path to write manifest audit JSONL"
     ),
@@ -161,7 +161,7 @@ def parse_file(
 
 @app.command()
 def parse_repository(
-    scope: str = typer.Option("smoke", help="Filter scope (smoke or final)"),
+    scope: str = typer.Option("smoke", help="Filter scope (smoke, eligible, or final)"),
     limit: Optional[int] = typer.Option(None, help="Limit maximum files to parse for demos"),
     dry_run: bool = typer.Option(True, help="Run in dry-run mode (write local JSONL)"),
     out_dir: Optional[Path] = typer.Option(None, help="Output directory for JSONL events"),
@@ -186,7 +186,11 @@ def parse_repository(
         writer=writer,
     )
 
-    manifest_path = Path("artifacts/manifests/source-files.jsonl")
+    manifest_path = (
+        Path("artifacts/manifests/source-files.jsonl")
+        if scope in {"eligible", "final"}
+        else Path(f"artifacts/manifests/source-files-{scope}.jsonl")
+    )
     manifest_writer = ManifestWriter(manifest_path)
     discover_service = DiscoverRepositoryService(
         repo_adapter=repo_adapter,

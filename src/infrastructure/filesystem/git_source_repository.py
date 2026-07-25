@@ -1,12 +1,18 @@
 """Git source repository adapter implementing file system searches and git commands."""
 
+from collections.abc import Iterable
 import fnmatch
+import hashlib
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 import yaml
 from application.ports import SourceRepositoryPort
 from domain.errors import RepositoryNotFoundError, ParsingError
+
+
+DEFAULT_FILTER_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config/file_filters.yaml"
 
 
 class GitSourceRepository(SourceRepositoryPort):
@@ -17,6 +23,8 @@ class GitSourceRepository(SourceRepositoryPort):
         self.clone_url = clone_url
         self.target_commit = target_commit
         self.file_size_limit_bytes = 5 * 1024 * 1024  # Default 5MB
+        self._filter_config_cache: dict[str, Any] | None = None
+        self._scope_cache: dict[str, dict[str, Any]] = {}
 
     def clone_repository(self) -> None:
         """Executes a shallow clone of the repository if it is not present on disk."""
@@ -59,57 +67,65 @@ class GitSourceRepository(SourceRepositoryPort):
     def resolve_path(self, relative_path: Path) -> Path:
         return (self.repo_path / relative_path).resolve()
 
-    def list_files(self, source_root: Path | None = None) -> list[Path]:
-        """Traverses the source root applying filters to list matched Python files."""
-        # Resolve target source root directory (default is repo_path / "src" if exists)
-        target_root = source_root if source_root else self.repo_path / "src"
-        if not target_root.exists():
-            target_root = self.repo_path
-
-        # Find filters file
-        filter_path = Path("config/file_filters.yaml")
-        if not filter_path.exists():
-            filter_path = Path("../config/file_filters.yaml")
-
-        scope = os.getenv("PARSER_SCOPE", "final")
-        include_patterns: list[str] = ["**/*.py"]
-        exclude_patterns: list[str] = []
-
-        if filter_path.exists():
-            with open(filter_path, "r", encoding="utf-8") as f:
-                filters_data = yaml.safe_load(f) or {}
-                scope_data = filters_data.get(scope, {})
-                include_patterns = scope_data.get("include", include_patterns)
-                exclude_patterns = scope_data.get("exclude", exclude_patterns)
-
+    def list_python_files(self, source_root: Path | None = None) -> list[Path]:
+        """Traverses the repository tree and returns every Python file before filtering."""
+        target_root = self._resolve_source_root(source_root)
         discovered: list[Path] = []
-        # Traverse filesystem
-        for root, _, files in os.walk(str(target_root)):
-            for file in files:
-                abs_file_path = Path(root) / file
-                rel_to_repo = abs_file_path.relative_to(self.repo_path)
-                rel_path_str = rel_to_repo.as_posix()
 
-                # Match includes
-                matched_include = any(
-                    fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(file, pattern)
-                    for pattern in include_patterns
-                )
-                if not matched_include:
+        for root, dirs, files in os.walk(str(target_root)):
+            self._prune_ignored_directories(dirs)
+            for file_name in files:
+                if not file_name.endswith(".py"):
                     continue
-
-                # Match excludes
-                matched_exclude = any(
-                    fnmatch.fnmatch(rel_path_str, pattern) or fnmatch.fnmatch(file, pattern)
-                    for pattern in exclude_patterns
-                )
-                if matched_exclude:
+                abs_file_path = Path(root) / file_name
+                try:
+                    rel_to_repo = abs_file_path.relative_to(self.repo_path)
+                except ValueError:
                     continue
-
                 discovered.append(rel_to_repo)
 
-        # Return deterministically sorted list
-        return sorted(discovered)
+        return sorted(set(discovered), key=lambda path: path.as_posix())
+
+    def list_files(self, source_root: Path | None = None) -> list[Path]:
+        """Applies scope filters to repository-wide raw Python files."""
+        scope = os.getenv("PARSER_SCOPE", "final")
+        scope_data = self._load_scope(scope)
+        include_patterns = scope_data.get("include", ["**/*.py"])
+
+        selected: list[Path] = []
+        for relative_path in self.list_python_files(source_root):
+            rel_path_str = relative_path.as_posix()
+            if not self._matches_any(rel_path_str, include_patterns):
+                continue
+            if self._get_exclusion_reason_from_scope_data(relative_path, scope_data):
+                continue
+            selected.append(relative_path)
+
+        limit = self.get_scope_limit(scope)
+        if limit is not None:
+            selected = selected[:limit]
+        return selected
+
+    def get_exclusion_reason(self, relative_path: Path, scope: str) -> str | None:
+        """Returns the first configured exclusion reason matched by the path."""
+        scope_data = self._load_scope(scope)
+        return self._get_exclusion_reason_from_scope_data(relative_path, scope_data)
+
+    def _get_exclusion_reason_from_scope_data(self, relative_path: Path, scope_data: dict[str, Any]) -> str | None:
+        rel_path_str = relative_path.as_posix()
+        for rule in scope_data.get("exclude", []):
+            pattern, reason = self._normalize_exclusion_rule(rule)
+            if self._matches_pattern(rel_path_str, pattern):
+                return reason
+        return None
+
+    def get_scope_limit(self, scope: str) -> int | None:
+        """Returns the configured max file count for bounded scopes."""
+        scope_data = self._load_scope(scope)
+        limit = scope_data.get("max_files")
+        if limit is None:
+            return None
+        return int(limit)
 
     def read_file(self, relative_path: Path) -> bytes:
         """Reads content bytes strictly and asserts UTF-8 formatting and file sizes."""
@@ -132,6 +148,96 @@ class GitSourceRepository(SourceRepositoryPort):
             raise ParsingError(f"File {relative_path} is not valid UTF-8.") from exc
         except Exception as exc:
             raise ParsingError(f"Failed to read file {relative_path}: {exc}") from exc
+
+    def compute_content_hash(self, relative_path: Path) -> str:
+        """Computes a stable content hash for manifest audit records."""
+        digest = hashlib.sha256()
+        with open(self.resolve_path(relative_path), "rb") as file_obj:
+            for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _resolve_source_root(self, source_root: Path | None) -> Path:
+        if source_root is None:
+            return self.repo_path
+        candidate = source_root
+        if not candidate.is_absolute():
+            candidate = self.repo_path / candidate
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(self.repo_path)
+        except ValueError as exc:
+            raise RepositoryNotFoundError(f"Source root escapes repository root: {source_root}") from exc
+        if not resolved.exists():
+            raise RepositoryNotFoundError(f"Source root does not exist: {resolved}")
+        return resolved
+
+    def _load_filter_config(self) -> dict[str, Any]:
+        if self._filter_config_cache is not None:
+            return self._filter_config_cache
+        filter_path = DEFAULT_FILTER_CONFIG_PATH
+        if not filter_path.exists():
+            filter_path = Path("config/file_filters.yaml")
+        if not filter_path.exists():
+            self._filter_config_cache = {}
+            return self._filter_config_cache
+        with open(filter_path, "r", encoding="utf-8") as f:
+            loaded = yaml.safe_load(f) or {}
+        if not isinstance(loaded, dict):
+            self._filter_config_cache = {}
+            return self._filter_config_cache
+        self._filter_config_cache = loaded
+        return self._filter_config_cache
+
+    def _load_scope(self, scope: str) -> dict[str, Any]:
+        if scope in self._scope_cache:
+            return self._scope_cache[scope]
+        filters_data = self._load_filter_config()
+        raw_scope = filters_data.get(scope, {})
+        if not isinstance(raw_scope, dict):
+            self._scope_cache[scope] = {"include": ["**/*.py"], "exclude": []}
+            return self._scope_cache[scope]
+
+        parent_name = raw_scope.get("extends")
+        if isinstance(parent_name, str):
+            parent_scope = self._load_scope(parent_name)
+            merged = dict(parent_scope)
+            merged.update({key: value for key, value in raw_scope.items() if key != "extends"})
+            self._scope_cache[scope] = merged
+            return merged
+        self._scope_cache[scope] = raw_scope
+        return self._scope_cache[scope]
+
+    @staticmethod
+    def _normalize_exclusion_rule(rule: Any) -> tuple[str, str]:
+        if isinstance(rule, dict):
+            pattern = str(rule.get("pattern", ""))
+            reason = str(rule.get("reason", "Excluded by filter pattern configuration"))
+            return pattern, reason
+        return str(rule), "Excluded by filter pattern configuration"
+
+    @staticmethod
+    def _matches_pattern(rel_path_str: str, pattern: str) -> bool:
+        file_name = rel_path_str.rsplit("/", maxsplit=1)[-1]
+        pattern_variants = {pattern}
+        if pattern.startswith("**/"):
+            pattern_variants.add(pattern[3:])
+        if "/**/" in pattern:
+            pattern_variants.add(pattern.replace("/**/", "/"))
+        return any(
+            fnmatch.fnmatch(rel_path_str, variant) or fnmatch.fnmatch(file_name, variant)
+            for variant in pattern_variants
+        )
+
+    @classmethod
+    def _matches_any(cls, rel_path_str: str, patterns: Iterable[str]) -> bool:
+        return any(cls._matches_pattern(rel_path_str, pattern) for pattern in patterns)
+
+    @staticmethod
+    def _prune_ignored_directories(dirs: list[str]) -> None:
+        for ignored in (".git", ".mypy_cache", ".pytest_cache", ".ruff_cache"):
+            if ignored in dirs:
+                dirs.remove(ignored)
 
 
 DefinitionOfDone = True
