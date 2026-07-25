@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Run the Task 6 live replay scenario and emit a runtime summary as JSON."""
 
 from __future__ import annotations
@@ -8,14 +9,12 @@ import io
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -27,18 +26,15 @@ from application.services.process_file import ProcessFileService
 from application.services.replay_file import ReplayFileService
 from domain.enums import ParseStatus
 from domain.models import SourceFile
-from infrastructure.config.mongodb import build_mongodb_uri, mask_mongodb_uri
+from infrastructure.config.mongodb import build_mongodb_uri
 from infrastructure.filesystem.git_source_repository import GitSourceRepository
 from infrastructure.messaging.event_validator import EventValidator
 from infrastructure.messaging.kafka_producer import KafkaEventProducer
 from infrastructure.state.sqlite_state_store import SqliteStateStore
 from infrastructure.verification.kafka_connect import (
-    get_connector_lag,
-    get_topic_end_offsets,
     wait_for_zero_lag,
 )
 from parsing.cpg_parser import CpgParser
-from parsing.identifiers import IdentifierGenerator
 
 
 TARGET_FILE = Path(".github/scripts/assign_reviewers.py")
@@ -227,7 +223,9 @@ def count_topic_records_containing(
     return total
 
 
-def run_spark(starting_offsets: dict[str, dict[str, int]] | None, checkpoint_dir: Path, mongodb_uri: str, env: dict[str, str]) -> tuple[int, str, list[int]]:
+def run_spark(
+    starting_offsets: dict[str, dict[str, int]] | None, checkpoint_dir: Path, mongodb_uri: str, env: dict[str, str]
+) -> tuple[int, str, list[int]]:
     """Run the metadata Spark job and return exit code, logs and parsed input rows."""
     network = subprocess.check_output(
         [
@@ -311,7 +309,9 @@ def mongo_json(javascript: str, container_name: str, uri: str) -> dict[str, Any]
     raise RuntimeError(f"Mongo query failed after retries: {last_error}")
 
 
-def mongo_document_state(container_name: str, database: str, collection: str, file_id: str, repository_id: str, file_path: str) -> dict[str, Any]:
+def mongo_document_state(
+    container_name: str, database: str, collection: str, file_id: str, repository_id: str, file_path: str
+) -> dict[str, Any]:
     """Return document counts and indexed fields for the metadata collection."""
     javascript = (
         f"const dbh=db.getSiblingDB('{database}'); "
@@ -384,10 +384,7 @@ def create_runtime_summary(run_id: str) -> dict[str, Any]:
 
         initial_source_bytes = source_path.read_text(encoding="utf-8")
         modified_source = initial_source_bytes + (
-            "\n\n\ndef task6_runtime_marker(value):\n"
-            "    if value:\n"
-            "        return value.strip()\n"
-            "    return value\n"
+            "\n\n\ndef task6_runtime_marker(value):\n    if value:\n        return value.strip()\n    return value\n"
         )
 
         validator = EventValidator(PROJECT_ROOT / "schemas")
@@ -442,7 +439,12 @@ def create_runtime_summary(run_id: str) -> dict[str, Any]:
         baseline_spark_exit, baseline_spark_logs, baseline_input_rows = run_spark(
             {"source.metadata": {"0": baseline_topic_offsets["source.metadata"].get(0, 0)}},
             checkpoint_dir,
-            build_mongodb_uri(env["MONGO_ROOT_USERNAME"], env["MONGO_ROOT_PASSWORD"], env["MONGODB_CONTAINER_HOST"], int(env["MONGODB_CONTAINER_PORT"])),
+            build_mongodb_uri(
+                env["MONGO_ROOT_USERNAME"],
+                env["MONGO_ROOT_PASSWORD"],
+                env["MONGODB_CONTAINER_HOST"],
+                int(env["MONGODB_CONTAINER_PORT"]),
+            ),
             env,
         )
         if baseline_spark_exit != 0:
@@ -513,7 +515,12 @@ def create_runtime_summary(run_id: str) -> dict[str, Any]:
         replay_spark_exit, replay_spark_logs, replay_input_rows = run_spark(
             None,
             checkpoint_dir,
-            build_mongodb_uri(env["MONGO_ROOT_USERNAME"], env["MONGO_ROOT_PASSWORD"], env["MONGODB_CONTAINER_HOST"], int(env["MONGODB_CONTAINER_PORT"])),
+            build_mongodb_uri(
+                env["MONGO_ROOT_USERNAME"],
+                env["MONGO_ROOT_PASSWORD"],
+                env["MONGODB_CONTAINER_HOST"],
+                int(env["MONGODB_CONTAINER_PORT"]),
+            ),
             env,
         )
         if replay_spark_exit != 0:
@@ -541,7 +548,12 @@ def create_runtime_summary(run_id: str) -> dict[str, Any]:
         unchanged_spark_exit, unchanged_spark_logs, unchanged_input_rows = run_spark(
             None,
             checkpoint_dir,
-            build_mongodb_uri(env["MONGO_ROOT_USERNAME"], env["MONGO_ROOT_PASSWORD"], env["MONGODB_CONTAINER_HOST"], int(env["MONGODB_CONTAINER_PORT"])),
+            build_mongodb_uri(
+                env["MONGO_ROOT_USERNAME"],
+                env["MONGO_ROOT_PASSWORD"],
+                env["MONGODB_CONTAINER_HOST"],
+                int(env["MONGODB_CONTAINER_PORT"]),
+            ),
             env,
         )
         if unchanged_spark_exit != 0:
@@ -611,9 +623,18 @@ def create_runtime_summary(run_id: str) -> dict[str, Any]:
             },
             "neo4j_integrity": neo4j_integrity,
             "spark_progress": {
-                "baseline": {"exit_code": baseline_spark_exit, "numInputRows": baseline_input_rows[-1] if baseline_input_rows else 0},
-                "replay": {"exit_code": replay_spark_exit, "numInputRows": replay_input_rows[-1] if replay_input_rows else 0},
-                "unchanged": {"exit_code": unchanged_spark_exit, "numInputRows": unchanged_input_rows[-1] if unchanged_input_rows else 0},
+                "baseline": {
+                    "exit_code": baseline_spark_exit,
+                    "numInputRows": baseline_input_rows[-1] if baseline_input_rows else 0,
+                },
+                "replay": {
+                    "exit_code": replay_spark_exit,
+                    "numInputRows": replay_input_rows[-1] if replay_input_rows else 0,
+                },
+                "unchanged": {
+                    "exit_code": unchanged_spark_exit,
+                    "numInputRows": unchanged_input_rows[-1] if unchanged_input_rows else 0,
+                },
             },
             "mongo_document_state": {
                 "baseline": baseline_mongo,
