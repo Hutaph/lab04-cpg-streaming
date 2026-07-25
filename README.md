@@ -31,6 +31,7 @@ flowchart LR
 - Ghi graph node/edge vào Neo4j bằng Kafka Connect.
 - Ghi metadata vào MongoDB bằng Spark Structured Streaming.
 - Kiểm chứng replay tăng dần không tạo duplicate trong các kịch bản đã chạy.
+- MongoDB authentication cần pass preflight trước khi chạy evidence live của Task 5/6.
 
 ## Repository nguồn
 
@@ -53,6 +54,8 @@ Raw discovery records là toàn bộ file `.py` được ghi nhận trong reposi
 | Task 4 | Kafka Connect -> Neo4j |
 | Task 5 | Spark Structured Streaming -> MongoDB |
 | Task 6 | Modified-file replay verification |
+
+Task 5 và Task 6 hiện đã harden ở tầng code, nhưng evidence live chỉ được refresh sau khi MongoDB preflight pass.
 
 ## Runtime services
 

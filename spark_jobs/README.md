@@ -12,6 +12,9 @@ checkpoint lưu offset Kafka để query có thể tiếp tục sau khi khởi �
 Writer dùng `replace` với `upsertDocument=true` và `idFieldList=file_id`; vì vậy
 replay cùng metadata sẽ cập nhật document hiện có thay vì tạo bản ghi mới.
 
+Stack canonical của job là Spark 3.3.0, Scala 2.12, `spark-sql-kafka-0-10_2.12:3.3.0`
+và `mongo-spark-connector_2.12:10.1.1`.
+
 ## Khởi chạy job ghi metadata sang MongoDB
 
 Chạy local bằng lệnh `spark-submit`:
@@ -58,3 +61,5 @@ spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.
 
 Không xóa thư mục checkpoint khi restart job. Nếu xóa checkpoint, Spark sẽ
 không còn offset đã commit và có thể đọc lại các event cũ.
+
+Trước khi chạy live evidence, xác thực MongoDB bằng `uv run python scripts/preflight_mongodb.py`.

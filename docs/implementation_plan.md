@@ -10,8 +10,8 @@ Tài liệu này mô tả trạng thái triển khai hiện tại của các tas
 | Task 2 | Verified locally | Parser smoke run, schema validation, stable IDs, incremental skip |
 | Task 3 | Verified with Kafka | Topic layout, Kafka key, schema validation, fresh publish, skip, parser error routing |
 | Task 4 | Verified with Kafka Connect/Neo4j | Connector state, lag 0, graph integrity, DLQ delta, replay-safe checks |
-| Task 5 | Verified with Spark/MongoDB runtime | Spark Structured Streaming metadata ingestion và checkpoint evidence |
-| Task 6 | Verified for replay scenarios | Modified-file replay và duplicate checks |
+| Task 5 | Hardening complete; runtime pending MongoDB preflight | Spark Structured Streaming metadata ingestion và checkpoint evidence |
+| Task 6 | Hardening complete; runtime pending MongoDB preflight | Modified-file replay và duplicate checks |
 
 ## Task 1 — Repository discovery
 
@@ -105,6 +105,7 @@ Mục tiêu:
 - dùng checkpoint để quản lý Kafka offsets;
 - ghi MongoDB bằng replace/upsert theo `file_id`;
 - giữ metadata path độc lập với Neo4j graph path.
+- chạy MongoDB preflight trước khi tạo evidence live;
 
 Evidence mong đợi:
 
@@ -120,6 +121,7 @@ Mục tiêu:
 - chạy replay để sinh DELETE/UPSERT/metadata events;
 - xác minh Neo4j và MongoDB không tạo duplicate;
 - kiểm tra state store và downstream outputs sau replay.
+- runtime evidence phải được query từ các service thật, không dùng hard-code.
 
 Evidence mong đợi:
 

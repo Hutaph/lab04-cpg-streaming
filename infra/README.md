@@ -121,6 +121,10 @@ docker compose --env-file .env -f infra/docker-compose.yml up -d mongodb mongo-e
 
 Task 5 dùng Spark Structured Streaming consume `source.metadata`, checkpoint offsets và upsert MongoDB theo `file_id`. Mongo Express chỉ là giao diện kiểm tra local; assertions chính vẫn nằm trong notebook/test.
 
+Trước khi chạy evidence live, dùng `uv run python scripts/preflight_mongodb.py`. Preflight kiểm tra container running, host/container authentication, database/collection access, unique indexes và khả năng Spark resolve host MongoDB. Nếu preflight fail, không xóa volume để "sửa" trạng thái.
+
+Stack canonical cho nhánh metadata/replay là Spark 3.3.0, Scala 2.12, `spark-sql-kafka-0-10_2.12:3.3.0` và `mongo-spark-connector_2.12:10.1.1`.
+
 ## Readiness checks
 
 Kafka topics:
@@ -155,6 +159,7 @@ docker compose --env-file .env -f infra/docker-compose.yml ps mongodb
 - Nếu Neo4j volume bị reset, chạy lại `scripts/create_neo4j_schema.py` trước khi replay graph events.
 - Nếu cần nạp lại Kafka records vào Neo4j sau khi reset database, reset consumer offsets của các group `connect-neo4j-nodes-sink` và `connect-neo4j-edges-sink` theo từng topic.
 - Records trong `connector.errors` không tự quay lại source topic; cần đọc DLQ, phân tích nguyên nhân và xử lý lại có chủ ý.
+- Nếu MongoDB auth fail do credential cũ trong volume, giữ nguyên volume và kiểm tra lại `.env`, `authSource=admin` và URL-encoding password trước khi chạy preflight lại.
 
 ## Dừng hạ tầng
 

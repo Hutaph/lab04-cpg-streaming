@@ -60,7 +60,7 @@ Các số liệu discovery được tạo từ repository root. Eligible parser 
 - Task 2 chứng minh parser có thể xử lý smoke sample bằng bounded-memory flow và stable IDs.
 - Task 3 xác minh bốn Parser Service topics với Kafka key bằng `file_id`.
 - Task 4 xác minh graph events được ingest trực tiếp vào Neo4j, lag trở về 0 và các kiểm tra duplicate/null/placeholder pass trong scenario đã chạy.
-- Task 5 và Task 6 giữ nhánh metadata/replay cho phần còn lại của pipeline.
+- Task 5 và Task 6 giữ nhánh metadata/replay cho phần còn lại của pipeline; evidence live của hai chương này chỉ hợp lệ khi MongoDB preflight pass.
 
 ## Cách đọc báo cáo
 
