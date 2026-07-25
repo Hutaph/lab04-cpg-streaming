@@ -85,7 +85,7 @@ uv run python scripts/inspect_kafka_events.py
 **Linux / WSL:**
 ```bash
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-MONGODB_URI='mongodb://root:Lab04MongoLocal123@localhost:27017/?authSource=admin' \
+MONGODB_URI='mongodb://root:${MONGO_ROOT_PASSWORD}@localhost:27017/?authSource=admin' \
 SPARK_CHECKPOINT_PATH=workspace/checkpoints/spark \
 spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.1.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
              spark_jobs/metadata_to_mongodb.py --available-now

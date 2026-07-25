@@ -210,7 +210,13 @@ Các giới hạn dưới đây được biết đến và chấp nhận trong p
 - **Tính nhất quán chéo hệ thống**: Nếu hệ thống sau này cần consistency mạnh hơn giữa nhiều storage systems, thiết kế phải cân nhắc các cơ chế như transactional outbox, staging, versioning, tombstones hoặc một consistency protocol tương đương.
 
 ### 5.4. Yêu cầu thiết kế cho Task 4 (Đã hoàn thành)
+**Status**: Completed and verified through integration tests and local runtime smoke validation.
+
 Neo4j Ingestion trong Task 4 đã được thiết kế và kiểm chứng đầy đủ với các kịch bản thực tế:
+- **Ingestion Idempotency**: Neo4j ingestion is replay-safe for the verified scenarios through stable IDs, uniqueness constraints, MERGE, generation-aware tombstones, and idempotent delete handling. Chúng tôi không cam kết transaction phân tán exactly-once chéo hệ thống.
+- **Ordering & Placeholders**: Kafka ordering is per partition within one topic. Không có thứ tự chéo topic. Edge events có thể đến trước node events, do đó placeholder handling là bắt buộc và đã được xử lý.
+- **Mixed-Batch Rollback Limitation**: Các record trong một Neo4j connector batch chia sẻ chung một giao dịch. Một record lỗi (ví dụ: endpoint mismatch) sẽ rollback toàn bộ giao dịch của batch đó. Bản ghi lỗi đi vào DLQ, còn các bản ghi hợp lệ trong batch bị rollback đó yêu cầu phải replay/retry để nạp lại.
+- **Cross-Generation Limitation**: Tombstone ngăn chặn stale replay cho cùng một thế hệ sự kiện (same generation). Tuy nhiên, thiết kế không xây dựng một thứ tự monotonic toàn cục giữa các thế hệ độc lập; thứ tự đến chéo thế hệ vẫn có thể ảnh hưởng đến kết quả cuối cùng.
 - **Order-tolerant ingestion (Đã giải quyết):**
   Cypher tự động tạo placeholder nodes khi `EDGE_UPSERT` đến trước một hoặc cả hai endpoint nodes mà không bị lỗi.
 - **Idempotent upsert và delete (Đã giải quyết):**

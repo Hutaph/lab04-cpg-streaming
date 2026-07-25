@@ -4,34 +4,34 @@ topics:
   - name: "cpg.nodes"
     partitions: 3  # TODO: Verify sizing during implementation
     replication_factor: 1  # TODO: Upgrade for clustered environment
-    key: "id"  # stable hash-based node ID
+    key: "file_id"  # parser publishes all file events with the deterministic file_id key
     purpose: "Transfers code syntax property graph node vertices"
     consumer: "Neo4j Kafka Sink Connector"
 
   - name: "cpg.edges"
     partitions: 3
     replication_factor: 1
-    key: "id"  # stable hash-based edge ID
+    key: "file_id"  # parser publishes all file events with the deterministic file_id key
     purpose: "Transfers graph connectivity relationships (AST, CFG, DFG, CALLS)"
     consumer: "Neo4j Kafka Sink Connector"
 
   - name: "source.metadata"
     partitions: 1
     replication_factor: 1
-    key: "file_path"  # partition key matches file identifier
+    key: "file_id"  # parser publishes all file events with the deterministic file_id key
     purpose: "Transfers code file parsing statistics and counts"
     consumer: "Spark Structured Streaming Job"
 
   - name: "parser.errors"
     partitions: 1
     replication_factor: 1
-    key: "id"
+    key: "file_id"
     purpose: "Parser Service error event topic for PARSER_ERROR events"
     consumer: "Audit Logs / Monitoring"
 
   - name: "connector.errors"
     partitions: 1
     replication_factor: 1
-    key: "id"
+    key: "file_id"
     purpose: "Kafka Connect dead-letter topic reserved for downstream connector failures"
     consumer: "Infrastructure alert monitoring"

@@ -55,7 +55,7 @@ Các topic được cấu hình bao gồm:
   - `cpg.edges`: Chứa các sự kiện trích xuất edges (3 partitions).
   - `source.metadata`: Chứa metadata thông tin và thống kê của file (1 partition). Được consume bởi Spark Structured Streaming (Task 5).
   - `parser.errors`: Topic chứa các sự kiện lỗi nghiệp vụ (PARSER_ERROR) sinh ra khi parser phân tích thất bại (1 partition).
-- **Planned Kafka Connect DLQ topic**:
+- **Kafka Connect DLQ topic**:
   - `connector.errors`: Dead Letter Queue chứa các sự kiện lỗi từ Kafka Connect (được cấu hình và kiểm chứng ở Task 4) (1 partition).
 
 
@@ -110,3 +110,33 @@ Dừng tất cả các container đang chạy:
 ```bash
 docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.neo4j.yml down
 ```
+
+---
+
+## Quy trình phục hồi sự cố (Recovery Runbook - Task 4)
+
+### 1. Sau khi reset volume Neo4j
+
+Khi volume của Neo4j bị xóa hoặc reset (ví dụ: chạy `docker compose down -v` hoặc xóa các volume Docker):
+- **Cài đặt lại ràng buộc cơ sở dữ liệu**: Database sẽ trống hoàn toàn và các ràng buộc dữ liệu bị mất. Bạn **phải** chạy lại script khởi tạo schema để tạo lại các constraints:
+  ```bash
+  PYTHONPATH=src uv run python scripts/create_neo4j_schema.py
+  ```
+  Nếu không có các uniqueness constraints, Neo4j sẽ không chặn được dữ liệu trùng lặp khi chạy lại, làm mất tính idempotent.
+- **Triển khai lại Connector**: Các thông tin credentials đăng ký trong Kafka Connect Connectors có thể không tự động cập nhật nếu có thay đổi trong `.env`. Chạy lại script triển khai để đồng bộ lại:
+  ```bash
+  PYTHONPATH=src uv run python scripts/deploy_connectors.py
+  ```
+- **Replay dữ liệu cũ**: Việc reset Neo4j database không tự động làm các offset của consumer quay lại từ đầu. Để nạp lại toàn bộ dữ liệu đã có trên Kafka vào Neo4j, bạn phải reset consumer offsets của các group `connect-neo4j-nodes-sink` và `connect-neo4j-edges-sink` thủ công:
+  ```bash
+  docker exec cpg-kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group connect-neo4j-nodes-sink --reset-offsets --to-earliest --execute --topic cpg.nodes
+  docker exec cpg-kafka kafka-consumer-groups --bootstrap-server localhost:9092 --group connect-neo4j-edges-sink --reset-offsets --to-earliest --execute --topic cpg.edges
+  ```
+- **Xử lý DLQ**: Các bản ghi đã đi vào DLQ (`connector.errors`) không tự động quay lại source topic. Chúng yêu cầu phân tích thủ công hoặc sử dụng một consumer phụ để xử lý lại. Không giải quyết các lỗi runtime bằng cách đơn giản là xóa sạch Docker volumes.
+
+### 2. Xử lý lệch cấu hình Credentials (Credential Mismatch)
+
+Nếu connector hoặc các task chuyển sang trạng thái `FAILED` do thay đổi mật khẩu Neo4j:
+- So sánh mật khẩu trong `.env` với cấu hình hiện tại của connector (che giấu mật khẩu thật trong log đầu ra).
+- Cập nhật trường credentials bằng cách chạy `deploy_connectors.py`.
+- Xác minh trạng thái của connector và tasks qua REST API (`GET /connectors/neo4j-nodes-sink/status` và `GET /connectors/neo4j-edges-sink/status`) để đảm bảo các task đã trở lại `RUNNING` sau khi rebalance.

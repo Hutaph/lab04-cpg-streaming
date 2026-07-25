@@ -19,7 +19,7 @@ Lab 04 yêu cầu xây dựng một pipeline xử lý streaming tăng dần đ�
 Hệ thống được thiết kế nhằm giải quyết bài toán trích xuất graph mã nguồn ở quy mô lớn với các tiêu chí:
 - **Tăng dần (Incremental)**: Chỉ parse và gửi sự kiện cho các file bị chỉnh sửa hoặc thêm mới, tránh parse lại toàn bộ dự án.
 - **Tiết kiệm bộ nhớ (Bounded Memory)**: Xử lý theo từng file độc lập thay vì load toàn bộ repository vào memory.
-- **Kháng trùng lặp (Idempotent)**: Mục tiêu thiết kế là khi chạy lại (replay) cùng một dữ liệu thì Neo4j và MongoDB không phát sinh bản ghi trùng lặp. Cơ sở là Stable deterministic IDs kết hợp Cypher `MERGE` và uniqueness constraints (Task 4); duplicate handling đầu cuối chưa được kiểm chứng trong Task 3.
+- **Kháng trùng lặp (Idempotent)**: Mục tiêu thiết kế là khi chạy lại (replay) cùng một dữ liệu thì Neo4j và MongoDB không phát sinh bản ghi trùng lặp. Cơ sở là Stable deterministic IDs kết hợp Cypher `MERGE` và uniqueness constraints (Task 4); duplicate handling đầu cuối đã được kiểm chứng và hoàn thiện ở Task 4.
 - **Tách biệt lưu trữ**: Sử dụng Neo4j chuyên dụng cho Graph và MongoDB cho tài liệu metadata.
 
 ---
@@ -142,26 +142,32 @@ sequenceDiagram
 ---
 
 ## 7. Event Schema
-Mỗi event được bọc trong một Envelope chung ch�- **Kafka Connect DLQ topic**:
-  - `connector.errors`: Kafka Connect Dead Letter Queue chứa các bản ghi lỗi từ downstream connector (được cấu hình và kiểm chứng đầy đủ ở Task 4).
+Mỗi event được bọc trong một Envelope chung chứa thông tin định tuyến, schema version, repository, commit, file và payload nghiệp vụ.
+
+- **Graph topics**:
+  - `cpg.nodes`: Chứa các sự kiện `NODE_UPSERT` và `NODE_DELETE`.
+  - `cpg.edges`: Chứa các sự kiện `EDGE_UPSERT` và `EDGE_DELETE`.
+- **Metadata topic**:
+  - `source.metadata`: Chứa sự kiện `FILE_METADATA_UPSERT`, được Spark Structured Streaming consume để ghi MongoDB.
+- **Parser error topic**:
+  - `parser.errors`: Chứa sự kiện `PARSER_ERROR` do Parser Service chủ động phát khi parse file thất bại.
+- **Kafka Connect DLQ topic**:
+  - `connector.errors`: Kafka Connect Dead Letter Queue chứa các bản ghi lỗi từ downstream connector, được cấu hình và kiểm chứng đầy đủ ở Task 4.
  
 ### 8.1 Kafka Ordering Semantics (Cơ chế đảm bảo thứ tự của Kafka)
-Để đảm bảo thiết kế downstream và xử lý luồng dữ liệu chính xác, các quy tắc thứ tự sự kiện (ordering semantics) được quy định rõ như sau:
 - **Khóa phân vùng (`file_id`)**: `file_id` được sử dụng làm partition key cho các topic. Mọi event có cùng `file_id` trong cùng một topic sẽ luôn được định tuyến nhất quán vào cùng một partition.
 - **Thứ tự theo từng Topic (Per-Topic Partition Ordering)**: Kafka chỉ bảo đảm thứ tự sự kiện (offset ordering) trong phạm vi **một topic partition duy nhất**. Ví dụ, thứ tự các node event của cùng một file được bảo toàn trong partition của `cpg.nodes`.
 - **Không bảo đảm thứ tự xuyên Topic (No Cross-Topic Ordering Guarantee)**: Do `cpg.nodes`, `cpg.edges` và `source.metadata` là các topic độc lập, Kafka **không bảo đảm bất kỳ thứ tự phân phối nào giữa các topic**.
   - Không thể giả định rằng node event luôn được consume trước edge event hoặc ngược lại.
   - Topic offsets của các topic khác nhau là cục bộ và không thể so sánh hay đối chiếu để suy luận thứ tự.
   - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
-- **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
-- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes bằng Cypher `MERGE` và uniqueness constraints, đồng thời được kiểm chứng toàn phần qua các bài test replay.
-- **Tính nhất quán chéo hệ thống**: Task 3 không cung cấp consistency toàn hệ thống. Order-tolerant ingestion, idempotent mutations và stale-event protection cho Neo4j đã được triển khai và kiểm chứng thành công ở Task 4. Spark Structured Streaming và MongoDB upsert semantics thuộc metadata streaming task (Task 5) cũng đã được xác minh.ering Guarantee)**: Do `cpg.nodes`, `cpg.edges` và `source.metadata` là các topic độc lập, Kafka **không bảo đảm bất kỳ thứ tự phân phối nào giữa các topic**.
-  - Không thể giả định rằng node event luôn được consume trước edge event hoặc ngược lại.
-  - Topic offsets của các topic khác nhau là cục bộ và không thể so sánh hay đối chiếu để suy luận thứ tự.
-  - Event `FILE_METADATA_UPSERT` được publish cuối cùng trong call sequence của Parser Service, nhưng không đóng vai trò completion barrier ở downstream vì các tin nhắn của topic khác có thể đến sau hoặc được xử lý song song.
-- **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) phải được thiết kế để chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, xử lý được trường hợp edge event đến trước node event.
-- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Task 4 triển khai Neo4j idempotent writes; duplicate handling chưa được kiểm chứng trong Task 3.
-- **Tính nhất quán chéo hệ thống**: Task 3 không cung cấp consistency toàn hệ thống. Order-tolerant ingestion, idempotent mutations và stale-event protection cho Neo4j phải được triển khai và kiểm chứng ở Task 4. Spark Structured Streaming và MongoDB upsert semantics thuộc metadata streaming task tương ứng.
+- **Yêu cầu đối với Downstream Consumer**: Neo4j consumer (Kafka Connect Sink) được thiết kế chịu được việc xáo trộn thứ tự giữa các topic (order-tolerant) — ví dụ, tự động tạo placeholder node khi edge event đến trước.
+- **Idempotency**: Crash sau Kafka acknowledgement nhưng trước SQLite commit có thể khiến cùng một batch được publish lại. Stable deterministic IDs tạo cơ sở để Neo4j Kafka Connect Sink triển khai idempotent writes bằng Cypher `MERGE` và uniqueness constraints, đồng thời được kiểm chứng toàn phần qua các bài test replay.
+- **Tính nhất quán chéo hệ thống**: Hệ thống không cam kết transaction phân tán chéo giữa SQLite, Kafka, Neo4j hay MongoDB. Tính nhất quán toàn cục dựa trên:
+  1. Idempotency (kháng trùng lặp): stable IDs và `MERGE` cập nhật.
+  2. Order-tolerant ingestion: tạo placeholder node khi edge đến trước.
+  3. Stale-event protection: Node/Edge Tombstones ngăn stale resurrection.
+  4. Spark Structured Streaming checkpoint recovery và MongoDB upsert ghi đè theo `file_id`.
 
 ### 8.2 Error Topic Semantics (Cơ chế và phân loại lỗi hệ thống)
 Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độc lập:
@@ -173,10 +179,10 @@ Hệ thống phân định rõ hai miền xử lý lỗi (failure domains) độ
    - **Lưu ý**: Đây **không** phải là Dead Letter Queue (DLQ). Lỗi cấu trúc sự kiện (schema validation failure) khi sinh payload sẽ dừng pipeline ngay lập tức và không được route vào topic này để tránh vòng lặp lỗi vô tận.
 
 2. **connector.errors (Kafka Connect Dead Letter Queue)**:
-   - **Bản chất**: Kafka Connect Dead Letter Queue (DLQ) dự kiến phục vụ cho hạ tầng Kafka Connect ở Task 4.
+   - **Bản chất**: Kafka Connect Dead Letter Queue (DLQ) phục vụ cho hạ tầng Kafka Connect ở Task 4.
    - **Producer**: Kafka Connect framework hoặc Neo4j Sink Connector tự động định tuyến.
    - **Mục đích**: Chứa các records thô ban đầu mà connector không thể xử lý (ví dụ: lỗi kết nối database, lỗi cú pháp truy vấn Cypher).
-   - **Lưu ý**: Hoàn toàn tách biệt khỏi luồng lỗi nghiệp vụ của Parser Service. Topic này sẽ được cấu hình và kiểm thử thực tế ở Task 4.
+   - **Lưu ý**: Hoàn toàn tách biệt khỏi luồng lỗi nghiệp vụ của Parser Service. Topic này đã được cấu hình và kiểm thử thực tế thành công ở Task 4.
 
 ---
 
@@ -312,4 +318,3 @@ Hệ thống hoạt động như một pipeline xử lý phân tán và bất đ
    Khi một batch chứa một bản ghi lỗi (mismatch endpoint), toàn bộ batch transaction của batch đó sẽ bị rollback ở phía Neo4j. Connector vẫn giữ trạng thái `RUNNING` và đẩy bản ghi lỗi vào DLQ (`connector.errors`), nhưng các bản ghi hợp lệ khác trong batch bị rollback đó sẽ bị mất ở Neo4j và cần được người dùng replay hoặc retry thủ công. Không được coi là các bản ghi hợp lệ đó đã thành công trong lần chạy đầu tiên.
 5. **Không đảm bảo Exactly-Once đầu-cuối (No End-to-End Exactly-Once)**:
    Hệ thống cam kết tính replay-safe bằng idempotency (kháng trùng lặp) hơn là transaction exactly-once toàn trình. Spark checkpoint hỗ trợ khôi phục offset và MongoDB replace upsert theo `file_id` hỗ trợ idempotent metadata update, nhưng không loại trừ hoàn toàn các duplicate tin nhắn trung gian trên mạng lưới.
-
