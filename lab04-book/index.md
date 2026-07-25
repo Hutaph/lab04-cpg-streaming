@@ -32,8 +32,8 @@ Báo cáo này trình bày quá trình xây dựng pipeline streaming để trí
 - **Task 6 (Idempotent Replay)**: Hoàn thành (Verified).
 
 Để tái hiện kiểm thử Task 5, chạy các lệnh trong [infra/README.md](../infra/README.md)
-để khởi động Kafka, Zookeeper, MongoDB và tạo topic `source.metadata`, sau đó
-chạy [Spark ingestion job](../spark_jobs/README.md) với tùy chọn `-AvailableNow`.
+để khởi động Kafka KRaft, MongoDB và tạo topic `source.metadata`, sau đó
+chạy Spark ingestion job với tùy chọn `-AvailableNow`.
 Không đưa `.env` hoặc password thật vào notebook và báo cáo công khai.
 
 ---

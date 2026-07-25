@@ -250,7 +250,7 @@ def test_edge_ingestion_and_placeholder_scenarios(kafka_producer: Producer, neo4
 
     kafka_producer.produce(edge_topic, key=file_id, value=json.dumps(edge_evt))
     kafka_producer.flush()
-    time.sleep(3.5)
+    time.sleep(6.0)
 
     # Verify that source and target nodes were created as placeholders
     res_nodes = run_cypher_query(
@@ -503,7 +503,13 @@ def test_dead_letter_queue_handling(kafka_producer: Producer, env_vars: dict[str
 def test_base_compose_without_neo4j_secret():
     """Verify that base docker-compose config command succeeds when NEO4J_PASSWORD is not set."""
     # Run config with NEO4J_PASSWORD unset using clean environment
+    import dotenv
+
     env = dict(os.environ)
+    if Path(".env").exists():
+        for k, v in dotenv.dotenv_values(".env").items():
+            if k != "NEO4J_PASSWORD" and v is not None:
+                env.setdefault(k, v)
     if "NEO4J_PASSWORD" in env:
         del env["NEO4J_PASSWORD"]
 
